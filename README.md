@@ -22,7 +22,7 @@ Not included: production scheduling optimization, warehouse management, truck ro
 
 ```mermaid
 flowchart LR
-    EB[EasyBooks\naccounting system of record] -->|known GET/report POST only| CLI[EasyBooks sync CLI]
+    EB["EasyBooks<br/>accounting system of record"] -->|known GET/report POST only| CLI[EasyBooks sync CLI]
     FX[Sanitized fixture bundle] --> CLI
     CLI --> RAW[(Immutable raw payload versions)]
     CLI --> ACCT[(Normalized sales and purchases)]
