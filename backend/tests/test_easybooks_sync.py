@@ -98,3 +98,45 @@ def test_sync_run_metrics_are_exposed_read_only(session, client, fixture_bundle)
     assert latest["documents_seen"] == 2
     assert latest["documents_created"] == 2
     assert latest["reconciliation_warnings"] == 0
+
+
+def test_header_only_sync_preserves_lines_and_repeats_idempotently(session, fixture_payload):
+    full = FixtureBundle.from_dict(deepcopy(fixture_payload))
+    sync_bundle(session, full)
+    line_id = session.scalar(select(SalesLine.id))
+
+    headers = FixtureBundle.from_dict(deepcopy(fixture_payload))
+    headers.sales_lines = {}
+    headers.sales_lines_available = False
+    first = sync_bundle(session, headers, mode="live-headers")
+
+    assert _count(session, SalesLine) == 1
+    assert session.scalar(select(SalesLine.id)) == line_id
+
+    second = sync_bundle(session, headers, mode="live-headers")
+    assert first.documents_failed == 0
+    assert second.documents_unchanged == 2
+    assert second.documents_created == 0
+    assert _count(session, SalesLine) == 1
+
+
+def test_header_only_sync_does_not_raise_line_reconciliation_warnings(session, fixture_payload):
+    headers = FixtureBundle.from_dict(deepcopy(fixture_payload))
+    headers.sales_lines = {}
+    headers.sales_lines_available = False
+
+    run = sync_bundle(session, headers, mode="live-headers")
+
+    assert run.documents_created == 2
+    assert run.reconciliation_warnings == 0
+    assert _count(session, SalesLine) == 0
+    assert _count(session, Customer) == 1
+
+
+def test_retrieval_warnings_are_counted_on_the_sync_run(session, fixture_bundle):
+    fixture_bundle.warnings = ["sales count reported 9 documents but 2 were retrieved"]
+
+    run = sync_bundle(session, fixture_bundle)
+
+    assert run.reconciliation_warnings == 1
+    assert run.documents_created == 2

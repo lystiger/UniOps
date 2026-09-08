@@ -93,16 +93,47 @@ class EasyBooksClient:
             raise EasyBooksConfigurationError("UNIOPS_EASYBOOKS_COMPANY_ID is required")
         return self.settings.easybooks_company_id
 
-    def sales_documents(self, from_date: date, to_date: date) -> Any:
-        return self.transport.request(
-            "GET",
-            SALES_LIST_PATH,
-            params={
-                "companyID": self._company_id(),
-                "fromDate": from_date.isoformat(),
-                "toDate": to_date.isoformat(),
-            },
-        )
+    @property
+    def sales_page_size(self) -> int | None:
+        return self.settings.easybooks_sales_page_size
+
+    def paging_enabled(self) -> bool:
+        """True only when the operator configured an observed page size."""
+        return self.sales_page_size is not None
+
+    def _page_params(self, page_index: int) -> dict[str, Any]:
+        """Translate a zero-based page counter into observed query parameters.
+
+        EasyBooks paging parameter names were never observed, so they must be
+        supplied by the operator. UniOps refuses to guess them.
+        """
+        size = self.sales_page_size
+        if size is None:
+            raise EasyBooksConfigurationError("sales pagination is not enabled")
+        cursor_param = self.settings.easybooks_sales_page_param
+        size_param = self.settings.easybooks_sales_page_size_param
+        if not cursor_param or not size_param:
+            raise EasyBooksConfigurationError(
+                "sales pagination requires the observed page and page-size parameter names; "
+                "UniOps will not guess them"
+            )
+        if self.settings.easybooks_sales_page_mode == "offset":
+            cursor = page_index * size
+        else:
+            cursor = self.settings.easybooks_sales_first_page + page_index
+        return {cursor_param: cursor, size_param: size}
+
+    def sales_documents(
+        self, from_date: date, to_date: date, *, page_index: int | None = None
+    ) -> Any:
+        params: dict[str, Any] = {
+            "companyID": self._company_id(),
+            "fromDate": from_date.isoformat(),
+            "toDate": to_date.isoformat(),
+        }
+        if page_index is not None:
+            params.update(self._page_params(page_index))
+        return self.transport.request("GET", SALES_LIST_PATH, params=params)
 
     def sales_count(self, from_date: date, to_date: date) -> Any:
         return self.transport.request(

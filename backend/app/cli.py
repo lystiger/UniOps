@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 
 from app.config import get_settings
 from app.database import SessionLocal
-from app.integrations.easybooks.client import EasyBooksClient, HttpxReadOnlyTransport
+from app.integrations.easybooks.client import (
+    EasyBooksClient,
+    EasyBooksConfigurationError,
+    HttpxReadOnlyTransport,
+)
 from app.integrations.easybooks.sync import FixtureBundle, fetch_live_bundle, sync_bundle
 
 
@@ -24,7 +29,14 @@ def main() -> None:
     mode.add_argument("--live", action="store_true")
     sync.add_argument("--from-date", type=_date)
     sync.add_argument("--to-date", type=_date)
+    sync.add_argument(
+        "--headers-only",
+        action="store_true",
+        help="live only: read sales headers and purchases without the sales-detail route",
+    )
     args = parser.parse_args()
+    if args.headers_only and args.fixture:
+        parser.error("--headers-only applies to --live reads")
 
     settings = get_settings()
     to_date = args.to_date or date.today()
@@ -34,10 +46,17 @@ def main() -> None:
         bundle = FixtureBundle.from_dict(payload)
         mode_name = "fixture"
     else:
-        transport = HttpxReadOnlyTransport(settings)
-        client = EasyBooksClient(transport, settings)
-        bundle = fetch_live_bundle(client, from_date, to_date)
-        mode_name = "live"
+        try:
+            transport = HttpxReadOnlyTransport(settings)
+            client = EasyBooksClient(transport, settings)
+            bundle = fetch_live_bundle(
+                client, from_date, to_date, include_lines=not args.headers_only
+            )
+        except EasyBooksConfigurationError as exc:
+            # Expected operator-configuration refusal, not a crash.
+            print(f"EasyBooks live read refused: {exc}", file=sys.stderr)
+            raise SystemExit(2) from exc
+        mode_name = "live-headers" if args.headers_only else "live"
 
     with SessionLocal() as session:
         run = sync_bundle(session, bundle, mode=mode_name, from_date=from_date, to_date=to_date)

@@ -110,6 +110,13 @@ Running the same command again is safe. The second run reports unchanged documen
 
 Live mode is disabled by default and has not been authenticated or exercised in this repository. See [EasyBooks integration](docs/easybooks-integration.md) before enabling it.
 
+Sales retrieval pages only when the operator supplies the observed page parameter names; unset means one request, as verified. The `sa-invoice-count` companion read is advisory and bounds the paging loop. Because the sales-detail route is still unknown, `--headers-only` runs the list, count, and purchase reads against a live account without it:
+
+```bash
+uv run uniops sync-easybooks --live --headers-only \
+  --from-date 2026-08-01 --to-date 2026-08-31
+```
+
 ## Order API
 
 Core endpoints:
@@ -143,8 +150,9 @@ npm run build
 ## Known limitations
 
 - EasyBooks live authentication requires a legitimate operator-provided token or session cookie; no credentials are stored.
-- The exact sales-detail read endpoint was not supplied. Live sales ingestion refuses to proceed until its already-observed path is configured.
-- EasyBooks response envelopes have not been verified against a live account; fixture mode is the verified path.
+- The exact sales-detail read endpoint was not supplied. Full live sales ingestion refuses to proceed until its already-observed path is configured; `--headers-only` covers everything else.
+- EasyBooks paging parameter names were never observed. Paging is operator-configured and off by default; UniOps will not guess them.
+- EasyBooks response envelopes, including the sales count shape, have not been verified against a live account; fixture mode is the verified path.
 - There is no application authentication or role model in v0.1. Deploy only on a trusted internal network until that is added.
 - SQLite and synchronous database operations target the present small-team load, not high concurrency.
 - No production scheduling, inventory, delivery optimization, invoicing, receivable, or payment workflow is implemented yet.

@@ -37,7 +37,33 @@ UNIOPS_EASYBOOKS_COOKIE=
 UNIOPS_EASYBOOKS_SALES_DETAIL_PATH=
 ```
 
-Live mode refuses to start if it is disabled, has no credential, has no company ID, or attempts sales details without an operator-configured path. `companyID` is a request dimension, not proof of authorization.
+Live mode refuses to start if it is disabled, has no credential, has no company ID, or attempts sales details without an operator-configured path. `companyID` is a request dimension, not proof of authorization. Blank `.env` entries are treated as absent, so an empty token never becomes an empty `Authorization` header.
+
+### Sales list pagination
+
+EasyBooks paging parameters were **not** among the observed query dimensions, so UniOps does not guess their names. Leaving the page size unset keeps the verified behaviour of one unpaginated sales list request.
+
+```dotenv
+# Unset page size = single request. Set all three to enable paging.
+UNIOPS_EASYBOOKS_SALES_PAGE_SIZE=
+UNIOPS_EASYBOOKS_SALES_PAGE_PARAM=
+UNIOPS_EASYBOOKS_SALES_PAGE_SIZE_PARAM=
+
+# offset: cursor = page_index * page_size. page: cursor = first_page + page_index.
+UNIOPS_EASYBOOKS_SALES_PAGE_MODE=offset
+UNIOPS_EASYBOOKS_SALES_FIRST_PAGE=1
+UNIOPS_EASYBOOKS_SALES_MAX_PAGES=200
+```
+
+Setting a page size without both parameter names is a configuration error, not a guess. Paging only adds query parameters to the already-known sales list GET; it introduces no new path and no new method.
+
+The paging loop stops on the first of: an empty page, a page shorter than the page size, the document total reported by `sa-invoice-count`, a page containing only already-collected documents, or the page cap. The repeated-page guard means an endpoint that silently ignores the configured parameters degrades to a single page with a warning instead of looping forever.
+
+### Sales count
+
+`sa-invoice-count` is advisory. Its response envelope is unverified, so `_extract_count` accepts a bare number, a numeric string, or a `count`/`total`/`totalCount`/`totalRow`/`totalRows`/`totalResult` field (optionally nested under `data`/`result`/`value`) and otherwise returns nothing rather than a guessed number. A count read that fails or is unrecognised produces a warning and ingestion continues.
+
+A count larger than the number of retrieved documents is recorded as a reconciliation warning. When paging is not configured, that warning says explicitly that the list is probably paginated.
 
 Example after legitimate configuration:
 
@@ -45,6 +71,19 @@ Example after legitimate configuration:
 uv run uniops sync-easybooks --live \
   --from-date 2026-08-01 --to-date 2026-08-31
 ```
+
+### Header-only live reads
+
+The sales-detail route is still unknown, so a full live read cannot run. `--headers-only` performs the sales list, sales count, and purchase report reads without touching the detail route, which is enough to validate authentication, the date window, paging, and count agreement against a real account:
+
+```bash
+uv run uniops sync-easybooks --live --headers-only \
+  --from-date 2026-08-01 --to-date 2026-08-31
+```
+
+A header-only run records `mode = live-headers`, never calls the sales-detail route, and leaves already-normalized sales lines untouched. Line reconciliation is skipped because no lines were retrieved, so absent lines are never mistaken for a source correction. Repeated header-only runs over the same window report every document as unchanged.
+
+Because a header-only run hashes a fixed "not retrieved" marker in place of lines, alternating header-only and full runs reports documents as updated on each switch. No data is lost; only the change counters move.
 
 The default live window overlaps the previous seven days because no trustworthy EasyBooks `updatedAt` field has been identified. Re-running overlapping windows is safe.
 
@@ -111,11 +150,12 @@ Each run records start/finish time, fixture/live mode, date window, status, docu
 Before anyone claims live integration works:
 
 1. confirm the configured account and company are authorized through normal EasyBooks access;
-2. confirm the exact previously observed sales-detail GET route and response envelope;
-3. run a narrow read-only date window in a non-production UniOps database;
-4. compare sales count/list/detail and purchase report row counts with EasyBooks UI;
-5. inspect raw payload redaction and normalized Decimal/date fields;
-6. review reconciliation warnings;
-7. repeat the same window and verify all documents report unchanged;
-8. record the executed command and results without credentials.
+2. run a narrow `--headers-only` window in a non-production UniOps database and confirm the sales list, count, and purchase report respond;
+3. confirm whether the sales list is paginated; if it is, configure the observed page parameter names and re-run until the retrieved count matches `sa-invoice-count` with no warnings;
+4. confirm the exact previously observed sales-detail GET route and response envelope, then re-run without `--headers-only`;
+5. compare sales count/list/detail and purchase report row counts with EasyBooks UI;
+6. inspect raw payload redaction and normalized Decimal/date fields;
+7. review reconciliation warnings, including count disagreement and paging warnings;
+8. repeat the same window and verify all documents report unchanged;
+9. record the executed command and results without credentials.
 
