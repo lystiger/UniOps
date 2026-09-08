@@ -1,0 +1,67 @@
+{
+  "sales_documents": [
+    {
+      "id": "fixture-sale-001",
+      "companyID": "fixture-company",
+      "typeID": "SA_INVOICE",
+      "date": "2026-08-15T00:00:00+07:00",
+      "postedDate": "2026-08-15T00:00:00+07:00",
+      "noBook": "BH-0001",
+      "invoiceNo": "00000001",
+      "invoiceSeries": "F01",
+      "accountingObjectCode": "KH-FIXTURE-01",
+      "accountingObjectName": "Sanitized Customer A",
+      "totalAmount": "1500000.00",
+      "totalDiscountAmount": "0E-10",
+      "totalVATAmount": "150000.00",
+      "totalAllAmount": "1650000.00",
+      "recorded": true,
+      "currencyID": "VND"
+    }
+  ],
+  "sales_lines": {
+    "fixture-sale-001": [
+      {
+        "id": null,
+        "sAInvoiceID": null,
+        "materialGoodsID": "fixture-material-001",
+        "materialGoodsCode": "PAPER-FIX-01",
+        "materialGoodsName": "Sanitized converted paper",
+        "repositoryID": "fixture-repository",
+        "repositoryCode": "KHO-FIX",
+        "debitAccount": "131",
+        "creditAccount": "5111",
+        "accountingObjectCode": "KH-FIXTURE-01",
+        "unitName": "kg",
+        "quantity": "1000.0000",
+        "unitPrice": "1500.0000",
+        "amount": "1500000.00",
+        "discountAmount": "0E-10",
+        "vATAmount": "150000.00"
+      }
+    ]
+  },
+  "purchase_rows": [
+    {
+      "refID": "fixture-purchase-service-001",
+      "typeID": "PURCHASE_SERVICE",
+      "maKH": "NCC-FIXTURE-01",
+      "tenKH": "Sanitized Utility Vendor",
+      "ngayHachToan": "2026-08-20",
+      "ngayCTu": "2026-08-20",
+      "soCTu": "MH-0001",
+      "soHoaDon": "FIX-UTILITY-001",
+      "mahang": "SERVICE-ELECTRICITY",
+      "tenhang": "Sanitized electricity service",
+      "dvt": "month",
+      "soLuongMua": "1.0000",
+      "donGia": "0E-10",
+      "giaTriMua": "2500000.00",
+      "chietKhau": "0E-10",
+      "maSoThue": "0000000000",
+      "thueGTGT": "10",
+      "tyGia": "1.000000",
+      "dienGiai": "Monthly utility service fixture"
+    }
+  ]
+}
