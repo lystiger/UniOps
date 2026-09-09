@@ -73,8 +73,11 @@ No field anywhere in the observed payloads carries:
 - **a payment status**;
 - **payment transactions** of any kind.
 
-No payments endpoint has been observed. Guessing one is forbidden by the
-integration boundary, so none has been added.
+None of that is in the **sales** payload. Separate receivable and payment
+endpoints have since been observed and are documented in
+[EasyBooks receivables discovery](easybooks-receivables-discovery.md); they
+supply an invoice-level open amount, and confirm that a due date field exists and
+is empty. They do not supply settlement.
 
 ### What follows from that
 
@@ -160,8 +163,8 @@ cannot leave a stale flag behind.
 | --- | --- | --- |
 | `lifecycle_status` | the existing order workflow | UniOps |
 | `accounting_status` | `NOT_INVOICED`, `INVOICE_CANDIDATE`, `INVOICED` | links and candidates |
-| `payment_status` | `UNKNOWN` only | no payment source exists |
-| `due_status` | `UNKNOWN` only | no due date exists |
+| `payment_status` | `UNKNOWN` only | a source exists, but records no settlement |
+| `due_status` | `UNKNOWN` only | `dueDate` exists in the source and is null throughout |
 
 The production lifecycle and the accounting state are separate machines. The
 order status enum is not extended with payment values, and nothing derives one
@@ -169,8 +172,8 @@ from the other.
 
 `PaymentStatus` declares `UNPAID`, `PARTIALLY_PAID`, and `PAID`, and `DueStatus`
 declares `DUE` and `OVERDUE`. Nothing returns them and no test asserts them.
-They exist so the read model has somewhere to go the day a payment source is
-observed.
+They exist so the read model has somewhere to go the day settlement is actually
+recorded in EasyBooks.
 
 An invoice may only be called `OVERDUE` when a real due date is earlier than the
 reporting date **and** an outstanding amount above zero is known. Neither input
@@ -218,8 +221,17 @@ through the exceptions view, not a fault to flag on every sync.
 | Which receivables are overdue? | **No** — no due date exists |
 | Can every answer be traced to immutable source data? | Yes, through `source_raw_record_id` |
 
-The three "no" answers need one thing: an observed EasyBooks payments or
-receipts endpoint. When somebody captures that route from the EasyBooks web
-client's network traffic, it follows the same path everything else does — raw
-payload first, typed contract, normalization, lineage, reconciliation — and the
-`UNKNOWN` states above become real ones without any of the layering changing.
+Those routes have since been captured — see
+[EasyBooks receivables discovery](easybooks-receivables-discovery.md) — and the
+answers are still no, for a different reason than before.
+
+EasyBooks does expose customer debt and invoice-level open balances. What it does
+not expose for this company is settlement: the amount collected is zero against
+all 40 customers in every window tested, all 372 observed open items still carry
+their full original amount, and `dueDate` and `paymentClause` exist as fields and
+are null on every row. Roughly 29.7 billion VND of cash receipts and bank
+deposits are recorded, but never offset against the invoices.
+
+So `payment_status` and `due_status` stay `UNKNOWN`, and they now stay that way
+on verified evidence rather than on an absent endpoint. What would change it is
+the bookkeeping practice, not another capture.
