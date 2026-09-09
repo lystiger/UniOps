@@ -17,6 +17,13 @@ SALES_LIST_PATH = "/v2/api/sa-invoice-objects-filter"
 SALES_COUNT_PATH = "/v2/api/sa-invoice-count"
 SALES_DETAIL_PATH = "/v2/api/sa-invoice-details/by-saInvoiceID"
 PURCHASE_REPORT_PATH = "/api/dynamic-report/mua-hang"
+# Exchanges credentials for a bearer token. A POST that creates no business
+# data, so it does not widen the read-only boundary.
+AUTHENTICATE_PATH = "/api/authenticate"
+
+# Observed success key is unverified across deployments, so accept the usual
+# JHipster spellings and refuse rather than guess when none is present.
+TOKEN_RESPONSE_KEYS = ("id_token", "idToken", "token", "access_token", "accessToken", "jwt")
 
 # EasyBooks is operated from Vietnam, so "today" must be that calendar date. Using
 # UTC would roll over seven hours early and send the wrong business date.
@@ -38,6 +45,19 @@ PURCHASE_REPORT_FILE_NAME = "SoNhatKiMuaHang.xlsx"
 PURCHASE_REPORT_TYPE_CONFIG = 11
 PURCHASE_REPORT_ITEMS_PER_PAGE = 30
 PURCHASE_REPORT_FIRST_PAGE = 1
+
+
+def _token_from(payload: Any) -> str:
+    """Read the bearer token out of an authenticate response."""
+    if isinstance(payload, dict):
+        for key in TOKEN_RESPONSE_KEYS:
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    received = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
+    raise EasyBooksAuthError(
+        f"EasyBooks authenticate response carried no recognisable token; got {received}"
+    )
 
 
 def business_today() -> date:
@@ -80,9 +100,20 @@ class HttpxReadOnlyTransport:
             headers["Authorization"] = f"Bearer {token}"
         if settings.easybooks_cookie:
             headers["Cookie"] = settings.easybooks_cookie.get_secret_value()
-        if "Authorization" not in headers and "Cookie" not in headers:
+        self._credentials: tuple[str, str] | None = None
+        if settings.easybooks_username and settings.easybooks_password:
+            self._credentials = (
+                settings.easybooks_username,
+                settings.easybooks_password.get_secret_value(),
+            )
+        if (
+            "Authorization" not in headers
+            and "Cookie" not in headers
+            and self._credentials is None
+        ):
             raise EasyBooksConfigurationError(
-                "live mode requires legitimate EasyBooks bearer token or session cookie"
+                "live mode requires legitimate EasyBooks bearer token, session cookie, "
+                "or username and password"
             )
         # Without this header every filtered read returns an empty array instead of
         # an error, so an unset group would look like an empty accounting period.
@@ -98,6 +129,8 @@ class HttpxReadOnlyTransport:
             timeout=settings.easybooks_request_timeout_seconds,
         )
         self._max_retries = settings.easybooks_max_retries
+        if "Authorization" not in headers and self._credentials is not None:
+            self._log_in()
 
     def request(
         self,
@@ -108,17 +141,23 @@ class HttpxReadOnlyTransport:
         json_body: dict[str, Any] | None = None,
     ) -> Any:
         method = method.upper()
-        if method == "POST" and path != PURCHASE_REPORT_PATH:
+        if method == "POST" and path not in {PURCHASE_REPORT_PATH, AUTHENTICATE_PATH}:
             raise EasyBooksConfigurationError(f"POST is not allowed for EasyBooks path {path}")
         if method not in {"GET", "POST"}:
             raise EasyBooksConfigurationError(f"{method} is not allowed for EasyBooks")
 
+        renewed = False
         for attempt in range(self._max_retries + 1):
             try:
                 response = self._client.request(method, path, params=params, json=json_body)
-                # A rejected credential is terminal: retrying sends the same stale
-                # token three more times and still fails, with a raw status error.
                 if self._is_auth_failure(response):
+                    # With credentials the token can be renewed once and the request
+                    # retried. Without them, or if a renewed token is also rejected,
+                    # the failure is terminal: resending it only repeats the answer.
+                    if self._credentials is not None and not renewed:
+                        renewed = True
+                        self._log_in()
+                        continue
                     raise EasyBooksAuthError(self._auth_failure_message(response.status_code))
                 if response.status_code not in {408, 429} and response.status_code < 500:
                     response.raise_for_status()
@@ -129,6 +168,27 @@ class HttpxReadOnlyTransport:
                     raise
                 time.sleep(min(0.5 * (2**attempt), 4.0))
         raise RuntimeError("unreachable")
+
+    def _log_in(self) -> None:
+        """Exchange credentials for a bearer token and adopt it.
+
+        Neither the credentials nor the token are logged or included in any raised
+        message.
+        """
+        if self._credentials is None:  # guarded by every caller
+            raise EasyBooksConfigurationError("no EasyBooks credentials are configured")
+        username, password = self._credentials
+        logger.info("requesting a new EasyBooks token", extra={"source": "easybooks"})
+        response = self._client.post(
+            AUTHENTICATE_PATH,
+            json={"username": username, "password": password, "rememberMe": False},
+        )
+        if self._is_auth_failure(response) or response.status_code >= 400:
+            raise EasyBooksAuthError(
+                "EasyBooks rejected the configured username and password. Check "
+                "UNIOPS_EASYBOOKS_USERNAME and UNIOPS_EASYBOOKS_PASSWORD."
+            )
+        self._client.headers["Authorization"] = f"Bearer {_token_from(response.json())}"
 
     @staticmethod
     def _is_auth_failure(response: httpx.Response) -> bool:

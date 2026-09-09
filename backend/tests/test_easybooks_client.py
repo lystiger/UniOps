@@ -77,7 +77,7 @@ def test_live_transport_requires_live_mode_and_a_legitimate_credential():
 
     with pytest.raises(EasyBooksConfigurationError, match="disabled"):
         HttpxReadOnlyTransport(Settings(easybooks_company_id="fixture"))
-    with pytest.raises(EasyBooksConfigurationError, match="bearer token or session cookie"):
+    with pytest.raises(EasyBooksConfigurationError, match="bearer token, session cookie"):
         HttpxReadOnlyTransport(
             Settings(easybooks_live_enabled=True, easybooks_company_id="fixture")
         )
@@ -106,13 +106,17 @@ def test_blank_env_values_do_not_count_as_credentials_or_configuration():
         easybooks_group="   ",
         easybooks_bearer_token="",
         easybooks_cookie="   ",
+        easybooks_username="  ",
+        easybooks_password="",
     )
     assert settings.easybooks_bearer_token is None
     assert settings.easybooks_cookie is None
     assert settings.easybooks_company_id is None
     assert settings.easybooks_group is None
+    assert settings.easybooks_username is None
+    assert settings.easybooks_password is None
 
-    with pytest.raises(EasyBooksConfigurationError, match="bearer token or session cookie"):
+    with pytest.raises(EasyBooksConfigurationError, match="bearer token, session cookie"):
         HttpxReadOnlyTransport(settings)
 
 

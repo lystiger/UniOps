@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     easybooks_group: str | None = None
     easybooks_bearer_token: SecretStr | None = None
     easybooks_cookie: SecretStr | None = None
+    # Optional. When present UniOps obtains its own bearer token and renews it
+    # after a rejection, instead of an operator pasting one every 30 days.
+    easybooks_username: str | None = None
+    easybooks_password: SecretStr | None = None
     easybooks_request_timeout_seconds: float = 20.0
     easybooks_max_retries: int = 3
     easybooks_sync_overlap_days: int = 7
@@ -30,6 +34,8 @@ class Settings(BaseSettings):
         "easybooks_group",
         "easybooks_bearer_token",
         "easybooks_cookie",
+        "easybooks_username",
+        "easybooks_password",
         mode="before",
     )
     @classmethod

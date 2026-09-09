@@ -174,7 +174,7 @@ npm run build
 ## Known limitations
 
 - EasyBooks live reads need an operator-provided bearer token plus the account's `group`; no credentials are stored in the repository.
-- **Bearer tokens expire after 30 days and there is no refresh flow.** Someone must supply a fresh token roughly monthly, so unattended syncing will stop until they do. A rejected credential is reported clearly and never retried, and `GET /api/sync-runs` exposes run status for alerting.
+- **Bearer tokens expire and there is no working refresh flow.** Observed lifetimes vary: a token accepted by the data API lasted 30 days, while one from `POST /api/authenticate` lasted 24 hours and was refused by the data API entirely. Credential login is implemented but **unverified end to end**; see the two-token problem in the integration doc. Someone must supply a fresh token roughly monthly, so unattended syncing will stop until they do. A rejected credential is reported clearly and never retried, and `GET /api/sync-runs` exposes run status for alerting.
 - The sales list, count, and detail contracts and the purchase report body all come from direct observation of the company account and have been verified live. The sales dynamic report was exercised and deliberately removed as redundant and unsafe to call.
 - EasyBooks returns an empty result rather than an error for several misconfigurations - a missing `group`, an inverted date window, an empty `listMaterialGoods`. Where UniOps can detect these it refuses instead of reporting zero rows.
 - Live ingestion is verified across full years 2024-2026 and a year boundary, with counts reconciling exactly. Only sales and purchases are ingested; no other EasyBooks entity is read.

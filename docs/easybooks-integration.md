@@ -75,6 +75,41 @@ That is the whole EasyBooks configuration surface. There is no endpoint, paging,
 
 Live mode refuses to start if it is disabled, has no credential, or has no group. `companyID` is a request dimension, not proof of authorization. Blank `.env` entries are treated as absent, so an empty token never becomes an empty `Authorization` header.
 
+### Obtaining a token automatically
+
+Bearer tokens last 30 days, so pasting one by hand does not survive unattended operation. Setting a username and password lets UniOps obtain its own:
+
+```dotenv
+UNIOPS_EASYBOOKS_USERNAME=uniops-service-account
+UNIOPS_EASYBOOKS_PASSWORD=
+```
+
+`POST /api/authenticate` takes `{username, password, rememberMe}`. It is the only POST besides the purchase report that the transport permits, and it creates no business data, so the read-only boundary is unchanged.
+
+The token is read from the response under `id_token`, with `idToken`, `token`, `access_token`, `accessToken` and `jwt` also accepted. An unrecognised response is refused, naming the keys that came back so it can be diagnosed, rather than guessed at.
+
+**Unverified end to end.** See the two-token problem below before relying on this.
+
+A token is fetched at startup when none is configured, and renewed **once** when a request is rejected, after which that request is retried. A renewed token that is also rejected is terminal, so a bad password cannot cause a refresh loop. Without credentials a rejection stays terminal as before. Neither the password nor the token is ever logged or included in a raised message.
+
+Use a dedicated EasyBooks user rather than a person's login: a personal account ties the sync to someone's password changes and departure. In a real deployment the password belongs in a secret store, not a checked-out `.env`.
+
+#### The two-token problem
+
+Two different EasyBooks tokens have been observed, and only one of them is accepted by the data API:
+
+| | Working token | `/api/authenticate` token |
+|---|---|---|
+| Lifetime | 30 days | 24 hours |
+| Claims | `sub`, `org`, `orgGetData`, `yearWork`, `isDependent`, `auth` | `sub`, `username`, `userId`, `companyId`, `authorities` |
+| `/v2/api/...` reads | accepted | rejected, HTTP 500 access denied |
+
+The rejected token was not clock-expired at the time; the server refused it. The claim sets differ entirely, and the accepted token carries exactly the organisation and working-year scoping the v2 API needs.
+
+The likely explanation is that `/api/authenticate` issues a first-stage token and a further step - selecting the company and working year - exchanges it for the org-scoped token. That step has not been observed, so the login implemented here obtains a token that may not be sufficient on its own.
+
+Until that second step is observed and implemented, unattended syncing is not solved: an operator still supplies a working token by hand. Do not assume the credential path works because the configuration exists.
+
 ### Credential expiry
 
 EasyBooks bearer tokens last **30 days** from issue, and using one does not extend it. There is no refresh flow, so an operator must currently supply a fresh token roughly monthly.
