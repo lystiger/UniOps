@@ -15,3 +15,14 @@ frontend/dist/
 frontend/coverage/
 .DS_Store
 
+
+# Playwright end-to-end harness. Runs against a throwaway temp database and
+# leaves traces, screenshots and seeded facts behind; none of it belongs in git.
+frontend/e2e/test-results/
+frontend/e2e/.facts.json
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/playwright/.cache/
+frontend/.playwright/
+frontend/ms-playwright/
