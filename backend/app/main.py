@@ -15,7 +15,7 @@ from app.api.sync_runs import router as sync_runs_router
 from app.config import get_settings
 from app.logging_config import configure_logging
 
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 
 
 @asynccontextmanager

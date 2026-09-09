@@ -130,6 +130,54 @@ timezone and shift every timestamp in the database.
 Keep the SQLite file after the move. It is the only rollback until the first
 PostgreSQL backup has been taken and restored once.
 
+## Releases and deployment
+
+Every pull request and every push to `main` runs the full suite on GitHub:
+`ruff` and `pytest` against SQLite, the same `pytest` against PostgreSQL 17,
+`eslint` and `tsc -b` and the unit tests, and the Playwright browser suite. The
+same four jobs run again before any tag is cut, so a released version is never
+one that only passed on somebody's laptop. `make ci` runs the same checks here.
+
+A release happens when the `version` in `pyproject.toml` changes on `main`. The
+workflow reads it, and if `v<version>` does not already exist it tags that commit
+and publishes a GitHub release. Bumping the version is therefore the whole act of
+releasing; merging anything else changes nothing.
+
+### Deploying
+
+Nothing pushes a deployment to this machine. The repository is public, so a
+GitHub Actions runner here would let a fork's pull request run code on the
+internal network, and a deployment credential stored on GitHub's side would be a
+credential to an internal system held somewhere it is not needed. Deployment
+pulls instead:
+
+```bash
+export UNIOPS_DATABASE_URL="postgresql+psycopg://uniops:$UNIOPS_DB_PASSWORD@127.0.0.1:5432/uniops"
+scripts/deploy.sh              # the newest released tag
+scripts/deploy.sh v0.1.4       # a named one
+```
+
+The script backs the database up, checks out the tag, syncs dependencies,
+migrates, rebuilds the frontend, restarts the service, and then waits for
+`/api/health` to answer with the version it just deployed. It refuses to start if
+the checkout has uncommitted changes, if `UNIOPS_DATABASE_URL` is unset, or if the
+tag does not exist, since none of those can be rolled back from cleanly.
+
+It expects a systemd unit named `uniops` (override with `UNIOPS_SERVICE`) that
+starts uvicorn from this directory, and it expects to be able to `sudo systemctl
+restart` it.
+
+### Rolling back
+
+```bash
+scripts/deploy.sh v0.1.3
+```
+
+That returns the code, the dependencies and the bundle. It does **not** undo a
+migration: an older schema revision is restored from the backup the deploy took
+first, per the recovery steps below. This is why the version bump and the
+migration should land in the same release — so that one tag describes one schema.
+
 ## Backups
 
 The database holds real customer, supplier, and financial data after any live
