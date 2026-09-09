@@ -14,10 +14,28 @@ from app.integrations.easybooks.client import (
     HttpxReadOnlyTransport,
 )
 from app.integrations.easybooks.sync import FixtureBundle, fetch_live_bundle, sync_bundle
+from app.services.export import export_workbook
 
 
 def _date(value: str) -> date:
     return date.fromisoformat(value)
+
+
+def _export(args: argparse.Namespace) -> None:
+    """Write the workbook from already-ingested data. No credential is needed."""
+    with SessionLocal() as session:
+        summary = export_workbook(
+            session, args.out, from_date=args.from_date, to_date=args.to_date
+        )
+    print(
+        json.dumps(
+            {
+                "path": str(summary.path),
+                "sheets": summary.sheet_rows,
+                "total_rows": summary.total_rows,
+            }
+        )
+    )
 
 
 def main() -> None:
@@ -37,7 +55,17 @@ def main() -> None:
             "without the sales-detail route"
         ),
     )
+    export = subparsers.add_parser(
+        "export", help="write ingested data to a workbook; reads no EasyBooks API"
+    )
+    export.add_argument("--out", type=Path, required=True, help="destination .xlsx path")
+    export.add_argument("--from-date", type=_date)
+    export.add_argument("--to-date", type=_date)
+
     args = parser.parse_args()
+    if args.command == "export":
+        _export(args)
+        return
     if args.headers_only and args.fixture:
         parser.error("--headers-only applies to --live reads")
 

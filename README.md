@@ -124,6 +124,21 @@ uv run uniops sync-easybooks --live --headers-only \
   --from-date 2026-08-01 --to-date 2026-08-31
 ```
 
+## Excel export
+
+Write everything already ingested to a workbook. This reads only the UniOps database, so it needs no EasyBooks credential and makes no HTTP request:
+
+```bash
+uv run uniops export --out uniops.xlsx \
+  --from-date 2026-05-01 --to-date 2026-09-08
+```
+
+Six sheets: sales documents, sales lines, purchase documents, purchase lines, customers, and products. Each has a frozen header row and an autofilter. Money and quantity cells keep their `Decimal` values with the source scale rather than being written as text.
+
+The date window bounds the four transactional sheets; the catalog sheets are always complete. Documents with no date are always included, since an undated document cannot be shown to fall outside the window and silently dropping one would lose a real record.
+
+Omit the dates to export everything.
+
 ## Order API
 
 Core endpoints:
