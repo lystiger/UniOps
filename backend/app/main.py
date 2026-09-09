@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.auth import users_router
 from app.api.catalog import router as catalog_router
@@ -13,7 +14,7 @@ from app.api.sync_runs import router as sync_runs_router
 from app.config import get_settings
 from app.logging_config import configure_logging
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 
 @asynccontextmanager
@@ -42,6 +43,7 @@ app.add_middleware(
 )
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
+app.include_router(analytics_router, prefix="/api")
 app.include_router(catalog_router, prefix="/api")
 app.include_router(orders_router, prefix="/api")
 app.include_router(sync_runs_router, prefix="/api")

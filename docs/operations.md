@@ -1,7 +1,6 @@
 # Running UniOps internally
 
-This is the operator's guide for v0.1.1: accounts, the PostgreSQL deployment,
-and backups. It assumes UniOps runs on one internal machine that the office and
+This is the operator's guide: accounts, the PostgreSQL deployment, and backups. It assumes UniOps runs on one internal machine that the office and
 the factory floor can reach, and that nothing about it is published.
 
 ## What v0.1.1 changed

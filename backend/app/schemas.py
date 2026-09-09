@@ -155,3 +155,39 @@ class UserRead(ApiModel):
     is_active: bool
     last_login_at: datetime | None
     created_at: datetime
+
+
+class MonthlyAmountRead(ApiModel):
+    month: str
+    amount: Decimal
+    document_count: int
+
+
+class SalesSummaryRead(ApiModel):
+    document_count: int
+    customer_count: int
+    total: Decimal
+    vat_amount: Decimal
+    # Documents EasyBooks gave no date. They cannot be placed in the window or in
+    # a month, so they are reported here rather than folded silently into a total.
+    undated_document_count: int
+    by_month: list[MonthlyAmountRead]
+
+
+class PurchaseSummaryRead(ApiModel):
+    document_count: int
+    supplier_count: int
+    total: Decimal
+    vat_amount: Decimal
+    undated_document_count: int
+    by_month: list[MonthlyAmountRead]
+
+
+class CommercialOverviewRead(ApiModel):
+    from_date: date | None
+    to_date: date | None
+    sales: SalesSummaryRead
+    purchases: PurchaseSummaryRead
+    # Gross commercial flow. Deliberately not called profit: purchases in a period
+    # are not the cost of the goods sold in that period.
+    sales_minus_purchases: Decimal

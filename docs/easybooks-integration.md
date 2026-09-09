@@ -2,9 +2,9 @@
 
 ## Boundary
 
-EasyBooks is the accounting system of record. UniOps v0.1 only reads known endpoints and stores derived copies. The integration contains no create, update, delete, browser automation, endpoint discovery, or company-ID-only authorization assumption.
+EasyBooks is the accounting system of record. UniOps only reads known endpoints and stores derived copies. The integration contains no create, update, delete, browser automation, endpoint discovery, or company-ID-only authorization assumption.
 
-Live mode is opt-in and has not yet been exercised against a live account from this repository. Fixture ingestion is fully functional without one.
+Live mode is opt-in and **has been exercised against the company account**: full years 2024-2026 have been ingested, counts reconciled exactly, and repeated runs reported every document unchanged. Fixture ingestion remains fully functional without a credential.
 
 ## Observed endpoints
 
@@ -129,7 +129,7 @@ An account requiring a one-time password cannot sign in unattended, so `isOTP` i
 
 ### Credential expiry
 
-EasyBooks bearer tokens last **30 days** from issue, and using one does not extend it. There is no refresh flow, so an operator must currently supply a fresh token roughly monthly.
+EasyBooks bearer tokens last **30 days** from issue, and using one does not extend it. A hand-pasted token therefore has to be replaced roughly monthly. Configuring a username and password removes that chore: UniOps obtains its own token and renews it on rejection, as described above.
 
 Detecting a rejected credential takes more than a status code: EasyBooks answers both an absent and a malformed token with **HTTP 500, not 401**. What distinguishes it is the body, which carries Spring Security's `ExceptionTranslationFilter` / access-denied path; a genuine server fault, such as the report `NullPointerException`, carries a service class name instead.
 
@@ -141,7 +141,7 @@ token has most likely expired - they last 30 days. Copy a current one from an
 authenticated browser session into UNIOPS_EASYBOOKS_BEARER_TOKEN.
 ```
 
-Unattended production sync needs a token the system can obtain itself; until then, monitor `GET /api/sync-runs` and alert when the newest run is not `SUCCEEDED`.
+Unattended sync therefore requires credentials rather than a pasted token. Either way, monitor `GET /api/sync-runs` and alert when the newest run is not `SUCCEEDED`.
 
 ### Verified window coverage
 
@@ -185,6 +185,21 @@ A header-only run records `mode = live-headers`, never calls the sales-detail ro
 Because a header-only run hashes a fixed "not retrieved" marker in place of lines, alternating header-only and full runs reports documents as updated on each switch. No data is lost; only the change counters move.
 
 The default live window overlaps the previous seven days because no trustworthy EasyBooks `updatedAt` field has been identified. Re-running overlapping windows is safe.
+
+### The report ends with a grand-total row
+
+The last row of the `mua-hang` response is a presentation footer, not a purchase:
+
+```json
+{ "soCTu": "Tổng cộng", "refID": null, "ngayCTu": null, "maKH": null, "typeID": null,
+  "soLuongMua": 141413.91, "giaTriMua": 3434358898.0 }
+```
+
+Its money fields hold the sum of every row above it. Ingested as a document it counted the same money twice, and an all-time purchase total came out at exactly double the truth - 54 real documents summing to 3,434,358,898, plus one footer carrying the same figure.
+
+It is recognised by having no document identity at all: no `refID`, no `ngayCTu`/`ngayHoaDon`/`ngayHachToan`, no `accountingObjectCode`/`maKH`, no `typeID`. The label `soCTu` is the only populated text field, and matching on that would break the moment the report is rendered in another language, so identity is what decides.
+
+Skipped rows are counted as a reconciliation warning on the sync run rather than dropped silently, so a change in the report's shape becomes visible instead of quietly changing a total.
 
 ### Purchase report row order is unstable
 
@@ -272,6 +287,8 @@ Warnings do not discard source data.
 ### Purchases
 
 Purchase rows group by `refID`. When absent, a deterministic fallback uses document number, date, vendor code, and type. `giaTriMua` is authoritative. UniOps never assumes quantity multiplied by unit price equals purchase amount; service and utility purchases may have a zero `donGia` with populated `giaTriMua`.
+
+`thueGTGT` is the VAT **amount** in dong, not a rate. It was first modelled as `NUMERIC(8,4)`, which SQLite accepted regardless of precision and PostgreSQL refused as a numeric field overflow on every real invoice. Every observed line divides out to exactly 0.08 of its purchase amount, but no rate is inferred or stored from that: the stored value is the amount the report gave.
 
 ### Decimals and dates
 

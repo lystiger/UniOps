@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import Any
 
@@ -9,6 +9,12 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.integrations.easybooks.client import EasyBooksClient
+from app.integrations.easybooks.contracts import (
+    CatalogItem,
+    PurchaseLineRecord,
+    SalesDocumentRecord,
+    SalesLineRecord,
+)
 from app.integrations.easybooks.normalization import (
     group_purchase_rows,
     normalize_purchase_document,
@@ -16,9 +22,12 @@ from app.integrations.easybooks.normalization import (
     normalize_sales_document,
     normalize_sales_lines,
     payload_hash,
-    reconcile_sales,
+    purchase_catalog_item,
+    report_total_rows,
+    sales_catalog_item,
     sales_customer_code,
 )
+from app.integrations.easybooks.reconciliation import check_integrity, reconcile_sales
 from app.models import (
     Customer,
     EasyBooksRawRecord,
@@ -173,40 +182,80 @@ def fetch_live_bundle(
     )
 
 
-def _preserve_raw(
+def _record_raw(
     session: Session,
     run: EasyBooksSyncRun,
     entity_type: str,
     source_id: str,
     payload: dict[str, Any] | list[Any],
-) -> bool:
+) -> EasyBooksRawRecord:
+    """Return the raw version for this exact payload, storing it if it is new.
+
+    The raw layer is append-only: an identical payload reuses the version already
+    held, and a changed one is added beside it. Nothing here ever rewrites a
+    stored payload, which is what lets a normalized row be reproduced from the
+    bytes that produced it.
+    """
     digest = payload_hash(payload)
-    exists = session.scalar(
-        select(EasyBooksRawRecord.id).where(
+    existing = session.scalar(
+        select(EasyBooksRawRecord).where(
             EasyBooksRawRecord.source_system == "easybooks",
             EasyBooksRawRecord.entity_type == entity_type,
             EasyBooksRawRecord.source_id == source_id,
             EasyBooksRawRecord.payload_hash == digest,
         )
     )
-    if exists:
-        return False
-    session.add(
-        EasyBooksRawRecord(
-            source_system="easybooks",
-            entity_type=entity_type,
-            source_id=source_id,
-            payload=payload,
-            payload_hash=digest,
-            sync_run_id=run.id,
-        )
+    if existing is not None:
+        return existing
+    record = EasyBooksRawRecord(
+        source_system="easybooks",
+        entity_type=entity_type,
+        source_id=source_id,
+        payload=payload,
+        payload_hash=digest,
+        sync_run_id=run.id,
     )
-    return True
+    session.add(record)
+    session.flush()
+    return record
 
 
-def _catalog_customer(session: Session, document: dict[str, Any]) -> None:
-    code = document.get("accounting_object_code")
-    name = document.get("accounting_object_name")
+def _link_sales_lineage(
+    document: SalesDocument,
+    run: EasyBooksSyncRun,
+    header_raw: EasyBooksRawRecord,
+    lines_raw: EasyBooksRawRecord | None,
+) -> None:
+    """Point a normalized sales document at the raw versions behind it.
+
+    Applied even when the normalized content is unchanged, because a source
+    payload can change in a field UniOps does not normalize. The pointer must
+    name the newest version that yields this content, not the first one that
+    happened to.
+    """
+    lines_id = lines_raw.id if lines_raw is not None else document.source_lines_raw_record_id
+    if (
+        document.source_raw_record_id == header_raw.id
+        and document.source_lines_raw_record_id == lines_id
+    ):
+        return
+    document.source_raw_record_id = header_raw.id
+    document.source_lines_raw_record_id = lines_id
+    document.sync_run_id = run.id
+
+
+def _link_purchase_lineage(
+    document: PurchaseDocument, run: EasyBooksSyncRun, raw: EasyBooksRawRecord
+) -> None:
+    if document.source_raw_record_id == raw.id:
+        return
+    document.source_raw_record_id = raw.id
+    document.sync_run_id = run.id
+
+
+def _catalog_customer(session: Session, document: SalesDocumentRecord) -> None:
+    code = document.accounting_object_code
+    name = document.accounting_object_name
     if not code or not name:
         return
     customer = session.scalar(
@@ -218,11 +267,8 @@ def _catalog_customer(session: Session, document: dict[str, Any]) -> None:
         customer.name = name
 
 
-def _catalog_product(session: Session, line: dict[str, Any]) -> None:
-    source_id = line.get("material_goods_id")
-    code = line.get("material_goods_code")
-    name = line.get("material_goods_name")
-    unit = line.get("unit")
+def _catalog_product(session: Session, item: CatalogItem) -> None:
+    source_id, code, name, unit = item.source_id, item.code, item.name, item.unit
     if not name or not unit or (not source_id and not code):
         return
     criteria = []
@@ -241,51 +287,38 @@ def _catalog_product(session: Session, line: dict[str, Any]) -> None:
 
 
 def _replace_sales_lines(
-    session: Session, document: SalesDocument, lines: list[dict[str, Any]]
+    session: Session, document: SalesDocument, lines: list[SalesLineRecord]
 ) -> None:
     existing = {line.source_line_key: line for line in document.lines}
     seen = set()
-    for values in lines:
-        key = values["source_line_key"]
-        seen.add(key)
-        line = existing.get(key)
+    for record in lines:
+        seen.add(record.source_line_key)
+        line = existing.get(record.source_line_key)
         if line is None:
-            line = SalesLine(sales_document_id=document.id, **values)
-            session.add(line)
+            session.add(SalesLine(sales_document_id=document.id, **record.as_columns()))
         else:
-            for name, value in values.items():
+            for name, value in record.as_columns().items():
                 setattr(line, name, value)
-        _catalog_product(session, values)
+        _catalog_product(session, sales_catalog_item(record))
     stale_ids = [line.id for key, line in existing.items() if key not in seen]
     if stale_ids:
         session.execute(delete(SalesLine).where(SalesLine.id.in_(stale_ids)))
 
 
 def _replace_purchase_lines(
-    session: Session, document: PurchaseDocument, lines: list[dict[str, Any]]
+    session: Session, document: PurchaseDocument, lines: list[PurchaseLineRecord]
 ) -> None:
     existing = {line.source_line_key: line for line in document.lines}
     seen = set()
-    for values in lines:
-        key = values["source_line_key"]
-        seen.add(key)
-        line = existing.get(key)
+    for record in lines:
+        seen.add(record.source_line_key)
+        line = existing.get(record.source_line_key)
         if line is None:
-            line = PurchaseLine(purchase_document_id=document.id, **values)
-            session.add(line)
+            session.add(PurchaseLine(purchase_document_id=document.id, **record.as_columns()))
         else:
-            for name, value in values.items():
+            for name, value in record.as_columns().items():
                 setattr(line, name, value)
-        # Purchase report has no observed stable material ID; code is the safe fallback.
-        _catalog_product(
-            session,
-            {
-                "material_goods_id": None,
-                "material_goods_code": values.get("material_goods_code"),
-                "material_goods_name": values.get("material_goods_name"),
-                "unit": values.get("unit"),
-            },
-        )
+        _catalog_product(session, purchase_catalog_item(record))
     stale_ids = [line.id for key, line in existing.items() if key not in seen]
     if stale_ids:
         session.execute(delete(PurchaseLine).where(PurchaseLine.id.in_(stale_ids)))
@@ -299,25 +332,30 @@ def _upsert_sales(
     *,
     lines_available: bool = True,
 ) -> tuple[str, int]:
-    normalized = normalize_sales_document(source)
-    source_id = normalized["source_id"]
+    record = normalize_sales_document(source)
+    source_id = record.source_id
     lines = normalize_sales_lines(source_id, raw_lines) if lines_available else []
-    warnings = reconcile_sales(normalized, lines) if lines_available else []
+    warnings = reconcile_sales(record, lines) if lines_available else []
     # The header names the customer but does not code it, so take the code from the
     # lines. Without this the document has no canonical customer to link to. A
     # header-only read leaves it unset rather than guessing.
-    if lines_available and not normalized["accounting_object_code"]:
+    if lines_available and not record.accounting_object_code:
         code, code_warnings = sales_customer_code(lines)
         if code:
-            normalized["accounting_object_code"] = code
+            record = replace(record, accounting_object_code=code)
         warnings.extend(code_warnings)
     # A header-only read hashes a fixed marker instead of an empty line list, so
     # repeated header-only runs stay idempotent and never look like line deletion.
-    line_fingerprint: Any = lines if lines_available else "not-retrieved"
-    combined_hash = payload_hash({"document": normalized, "lines": line_fingerprint})
-    _preserve_raw(session, run, "sales_document", source_id, source)
-    if lines_available:
-        _preserve_raw(session, run, "sales_lines", source_id, raw_lines)
+    line_fingerprint: Any = (
+        [line.as_hash_payload() for line in lines] if lines_available else "not-retrieved"
+    )
+    combined_hash = payload_hash(
+        {"document": record.as_hash_payload(), "lines": line_fingerprint}
+    )
+    header_raw = _record_raw(session, run, "sales_document", source_id, source)
+    lines_raw = (
+        _record_raw(session, run, "sales_lines", source_id, raw_lines) if lines_available else None
+    )
 
     document = session.scalar(
         select(SalesDocument).where(
@@ -325,23 +363,23 @@ def _upsert_sales(
         )
     )
     if document is None:
-        values = {**normalized, "normalized_hash": combined_hash}
-        document = SalesDocument(**values)
+        document = SalesDocument(**record.as_columns(), normalized_hash=combined_hash)
         session.add(document)
         session.flush()
         outcome = "created"
     elif document.normalized_hash == combined_hash:
         outcome = "unchanged"
     else:
-        for name, value in normalized.items():
+        for name, value in record.as_columns().items():
             setattr(document, name, value)
         document.normalized_hash = combined_hash
         document.synced_at = utc_now()
         outcome = "updated"
+    _link_sales_lineage(document, run, header_raw, lines_raw)
     if outcome != "unchanged":
         if lines_available:
             _replace_sales_lines(session, document, lines)
-        _catalog_customer(session, normalized)
+        _catalog_customer(session, record)
     for warning in warnings:
         logger.warning(
             warning,
@@ -356,10 +394,15 @@ def _upsert_purchase(
     source_id: str,
     rows: list[dict[str, Any]],
 ) -> str:
-    normalized = normalize_purchase_document(source_id, rows)
+    record = normalize_purchase_document(source_id, rows)
     lines = normalize_purchase_lines(source_id, rows)
-    combined_hash = payload_hash({"document": normalized, "lines": lines})
-    _preserve_raw(session, run, "purchase_document", source_id, rows)
+    combined_hash = payload_hash(
+        {
+            "document": record.as_hash_payload(),
+            "lines": [line.as_hash_payload() for line in lines],
+        }
+    )
+    raw = _record_raw(session, run, "purchase_document", source_id, rows)
     document = session.scalar(
         select(PurchaseDocument).where(
             PurchaseDocument.source_system == "easybooks",
@@ -367,19 +410,19 @@ def _upsert_purchase(
         )
     )
     if document is None:
-        values = {**normalized, "normalized_hash": combined_hash}
-        document = PurchaseDocument(**values)
+        document = PurchaseDocument(**record.as_columns(), normalized_hash=combined_hash)
         session.add(document)
         session.flush()
         outcome = "created"
     elif document.normalized_hash == combined_hash:
         outcome = "unchanged"
     else:
-        for name, value in normalized.items():
+        for name, value in record.as_columns().items():
             setattr(document, name, value)
         document.normalized_hash = combined_hash
         document.synced_at = utc_now()
         outcome = "updated"
+    _link_purchase_lineage(document, run, raw)
     if outcome != "unchanged":
         _replace_purchase_lines(session, document, lines)
     return outcome
@@ -406,6 +449,16 @@ def sync_bundle(
         logger.warning(
             warning,
             extra={"sync_run_id": run.id, "source": "easybooks", "entity_type": "sales_retrieval"},
+        )
+
+    # The purchase report's grand-total footer is not a document. Dropping it is
+    # reported rather than silent, so a change in the report's shape is visible.
+    skipped_totals = len(report_total_rows(bundle.purchase_rows))
+    if skipped_totals:
+        run.reconciliation_warnings += skipped_totals
+        logger.warning(
+            f"{skipped_totals} purchase report total rows were not ingested as documents",
+            extra={"sync_run_id": run.id, "source": "easybooks", "entity_type": "purchase_report"},
         )
 
     grouped_purchases = group_purchase_rows(bundle.purchase_rows)
@@ -446,6 +499,15 @@ def sync_bundle(
                 },
             )
             run.error_summary = str(exc)[:2000]
+
+    # Validate/reconcile: what was just published must hold together, whatever
+    # the source said. Breaks are reported, never silently accepted.
+    for warning in check_integrity(session).warnings:
+        run.reconciliation_warnings += 1
+        logger.warning(
+            warning,
+            extra={"sync_run_id": run.id, "source": "easybooks", "entity_type": "integrity"},
+        )
 
     run.finished_at = utc_now()
     run.status = SyncStatus.PARTIAL if run.documents_failed else SyncStatus.SUCCEEDED

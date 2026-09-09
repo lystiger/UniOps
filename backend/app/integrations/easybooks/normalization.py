@@ -1,3 +1,10 @@
+"""Turn observed EasyBooks payloads into UniOps records.
+
+This module is the only place that knows EasyBooks field names. Everything it
+returns is a typed record from :mod:`app.integrations.easybooks.contracts`, so
+source vocabulary stops here.
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -6,6 +13,14 @@ from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
+
+from app.integrations.easybooks.contracts import (
+    CatalogItem,
+    PurchaseDocumentRecord,
+    PurchaseLineRecord,
+    SalesDocumentRecord,
+    SalesLineRecord,
+)
 
 
 class NormalizationError(ValueError):
@@ -70,7 +85,7 @@ def _sales_vat_amount(source: dict[str, Any]) -> Any:
     return source.get("totalVAT")
 
 
-def normalize_sales_document(source: dict[str, Any]) -> dict[str, Any]:
+def normalize_sales_document(source: dict[str, Any]) -> SalesDocumentRecord:
     """Normalize one row of the observed sales list.
 
     Document-level money comes from ``totalAmount``, ``totalDiscountAmount``,
@@ -82,7 +97,7 @@ def normalize_sales_document(source: dict[str, Any]) -> dict[str, Any]:
     source_id = _text(source.get("id"))
     if not source_id:
         raise NormalizationError("sales document is missing stable id")
-    normalized = {
+    values = {
         "source_system": "easybooks",
         "source_id": source_id,
         "source_type": _text(source.get("typeID") or source.get("typeName")),
@@ -103,8 +118,7 @@ def normalize_sales_document(source: dict[str, Any]) -> dict[str, Any]:
         "total_amount": source_decimal(source.get("totalAllAmount")),
         "recorded": source.get("recorded") if isinstance(source.get("recorded"), bool) else None,
     }
-    normalized["normalized_hash"] = payload_hash(normalized)
-    return normalized
+    return SalesDocumentRecord(**values, normalized_hash=payload_hash(values))
 
 
 def _fallback_sales_signature(source: dict[str, Any]) -> dict[str, Any]:
@@ -124,7 +138,7 @@ def _fallback_sales_signature(source: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_sales_lines(
     document_source_id: str, source_lines: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+) -> list[SalesLineRecord]:
     occurrences: defaultdict[str, int] = defaultdict(int)
     result = []
     for source in source_lines:
@@ -142,26 +156,26 @@ def normalize_sales_lines(
                 }
             )
         result.append(
-            {
-                "source_line_key": line_key,
-                "source_line_id": explicit_id,
-                "material_goods_id": _text(source.get("materialGoodsID")),
-                "material_goods_code": _text(source.get("materialGoodsCode")),
-                "material_goods_name": _text(source.get("materialGoodsName")),
-                "repository_code": _text(source.get("repositoryCode")),
-                "accounting_object_code": _text(source.get("accountingObjectCode")),
-                "unit": _text(source.get("unitName")),
-                "quantity": source_decimal(source.get("quantity")),
-                "unit_price": source_decimal(source.get("unitPrice")),
-                "amount": source_decimal(source.get("amount")),
-                "discount_amount": source_decimal(source.get("discountAmount")),
-                "vat_amount": source_decimal(source.get("vATAmount")),
-            }
+            SalesLineRecord(
+                source_line_key=line_key,
+                source_line_id=explicit_id,
+                material_goods_id=_text(source.get("materialGoodsID")),
+                material_goods_code=_text(source.get("materialGoodsCode")),
+                material_goods_name=_text(source.get("materialGoodsName")),
+                repository_code=_text(source.get("repositoryCode")),
+                accounting_object_code=_text(source.get("accountingObjectCode")),
+                unit=_text(source.get("unitName")),
+                quantity=source_decimal(source.get("quantity")),
+                unit_price=source_decimal(source.get("unitPrice")),
+                amount=source_decimal(source.get("amount")),
+                discount_amount=source_decimal(source.get("discountAmount")),
+                vat_amount=source_decimal(source.get("vATAmount")),
+            )
         )
     return result
 
 
-def sales_customer_code(lines: list[dict[str, Any]]) -> tuple[str | None, list[str]]:
+def sales_customer_code(lines: list[SalesLineRecord]) -> tuple[str | None, list[str]]:
     """Derive a sales document's customer code from its detail lines.
 
     The observed sales list carries ``accountingObjectName`` but no
@@ -173,12 +187,46 @@ def sales_customer_code(lines: list[dict[str, Any]]) -> tuple[str | None, list[s
     therefore unexpected rather than routine, so it yields no code and a warning
     instead of an arbitrary pick.
     """
-    codes = {code for line in lines if (code := _text(line.get("accounting_object_code")))}
+    codes = {code for line in lines if (code := _text(line.accounting_object_code))}
     if not codes:
         return None, []
     if len(codes) > 1:
         return None, [f"sales lines disagree on customer code: {sorted(codes)}"]
     return codes.pop(), []
+
+
+# Identity fields a real purchase row always carries. A row with none of them is
+# not a document, whatever else it holds.
+PURCHASE_IDENTITY_KEYS = (
+    "refID",
+    "ngayCTu",
+    "ngayHoaDon",
+    "ngayHachToan",
+    "accountingObjectCode",
+    "maKH",
+    "typeID",
+)
+
+
+def is_report_total_row(source: dict[str, Any]) -> bool:
+    """True for the report's trailing grand-total line, which is not a purchase.
+
+    The `mua-hang` report ends with a summary row whose money fields hold the sum
+    of every row above it. Ingested as a document it doubled the all-time purchase
+    total, because the same money was counted once in the real rows and again in
+    the footer.
+
+    It is recognised by having no document identity at all - no refID, no
+    document or invoice date, no vendor, no type. Its only populated text field
+    is a display label (`soCTu`, observed as "Tong cong"), and matching on that
+    would break the moment the report is rendered in another language, so
+    identity is what decides.
+    """
+    return not any(_text(source.get(key)) for key in PURCHASE_IDENTITY_KEYS)
+
+
+def report_total_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [row for row in rows if is_report_total_row(row)]
 
 
 def purchase_document_key(source: dict[str, Any]) -> str:
@@ -207,18 +255,25 @@ def group_purchase_rows(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, 
 
     Sorting by canonical content loses nothing, since the source order carries no
     meaning, and it makes an unchanged document hash identically every time.
+
+    The report's grand-total footer is dropped here rather than grouped, because
+    it is a presentation row and not a purchase. See :func:`is_report_total_row`.
     """
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
+        if is_report_total_row(row):
+            continue
         grouped[purchase_document_key(row)].append(row)
     return {key: sorted(value, key=canonical_json) for key, value in grouped.items()}
 
 
-def normalize_purchase_document(source_id: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+def normalize_purchase_document(
+    source_id: str, rows: list[dict[str, Any]]
+) -> PurchaseDocumentRecord:
     if not rows:
         raise NormalizationError("purchase document has no rows")
     first = rows[0]
-    normalized = {
+    values = {
         "source_system": "easybooks",
         "source_id": source_id,
         "source_type": _text(first.get("typeID")),
@@ -235,8 +290,7 @@ def normalize_purchase_document(source_id: str, rows: list[dict[str, Any]]) -> d
             (source_decimal(row.get("giaTriMua")) for row in rows), Decimal("0")
         ),
     }
-    normalized["normalized_hash"] = payload_hash(normalized)
-    return normalized
+    return PurchaseDocumentRecord(**values, normalized_hash=payload_hash(values))
 
 
 def _fallback_purchase_signature(source: dict[str, Any]) -> dict[str, Any]:
@@ -253,7 +307,7 @@ def _fallback_purchase_signature(source: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_purchase_lines(
     document_source_id: str, rows: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+) -> list[PurchaseLineRecord]:
     occurrences: defaultdict[str, int] = defaultdict(int)
     result = []
     for source in rows:
@@ -267,40 +321,42 @@ def normalize_purchase_lines(
             }
         )
         result.append(
-            {
-                "source_line_key": line_key,
-                "material_goods_code": _text(source.get("mahang")),
-                "material_goods_name": _text(source.get("tenhang")),
-                "unit": _text(source.get("dvt")),
-                "quantity": source_decimal(source.get("soLuongMua")),
-                "unit_price": source_decimal(source.get("donGia")),
-                "purchase_amount": source_decimal(source.get("giaTriMua")),
-                "discount_amount": source_decimal(source.get("chietKhau")),
-                "vat_amount": (
+            PurchaseLineRecord(
+                source_line_key=line_key,
+                material_goods_code=_text(source.get("mahang")),
+                material_goods_name=_text(source.get("tenhang")),
+                unit=_text(source.get("dvt")),
+                quantity=source_decimal(source.get("soLuongMua")),
+                unit_price=source_decimal(source.get("donGia")),
+                purchase_amount=source_decimal(source.get("giaTriMua")),
+                discount_amount=source_decimal(source.get("chietKhau")),
+                # `thueGTGT` is the VAT amount in dong, never a percentage.
+                vat_amount=(
                     source_decimal(source.get("thueGTGT"))
                     if source.get("thueGTGT") not in (None, "")
                     else None
                 ),
-                "warehouse_code": _text(source.get("maKho")),
-                "description": _text(source.get("dienGiai") or source.get("dienGiaiChung")),
-            }
+                warehouse_code=_text(source.get("maKho")),
+                description=_text(source.get("dienGiai") or source.get("dienGiaiChung")),
+            )
         )
     return result
 
 
-def reconcile_sales(
-    document: dict[str, Any], lines: list[dict[str, Any]], tolerance: Decimal = Decimal("1")
-) -> list[str]:
-    warnings = []
-    line_amount = sum((line["amount"] for line in lines), Decimal("0"))
-    line_vat = sum((line["vat_amount"] for line in lines), Decimal("0"))
-    calculated_total = document["subtotal"] - document["discount_amount"] + document["vat_amount"]
-    checks = (
-        ("line subtotal", line_amount, document["subtotal"]),
-        ("line VAT", line_vat, document["vat_amount"]),
-        ("header total", calculated_total, document["total_amount"]),
+def sales_catalog_item(line: SalesLineRecord) -> CatalogItem:
+    return CatalogItem(
+        source_id=line.material_goods_id,
+        code=line.material_goods_code,
+        name=line.material_goods_name,
+        unit=line.unit,
     )
-    for label, actual, expected in checks:
-        if abs(actual - expected) > tolerance:
-            warnings.append(f"{label} differs by {actual - expected}")
-    return warnings
+
+
+def purchase_catalog_item(line: PurchaseLineRecord) -> CatalogItem:
+    """The purchase report carries no stable material ID, so code is the identity."""
+    return CatalogItem(
+        source_id=None,
+        code=line.material_goods_code,
+        name=line.material_goods_name,
+        unit=line.unit,
+    )

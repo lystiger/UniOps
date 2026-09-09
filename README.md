@@ -1,4 +1,4 @@
-# UniOps v0.1.1
+# UniOps v0.1.2
 
 UniOps is the lightweight operational system of record for UniGreen's make-to-order paper converting workflow. It captures customer orders before accounting, shows their movement through production and delivery, and preserves read-only EasyBooks source data for audit and normalization.
 
@@ -6,8 +6,12 @@ EasyBooks remains the accounting system of record. UniOps never creates, changes
 
 ## Scope
 
-Included in v0.1.1:
+Included in v0.1.2:
 
+- a layered data platform - raw, accounting, domain, mart - with source lineage
+  from every normalized row back to the exact EasyBooks payload behind it;
+- typed connector contracts, so EasyBooks field names stop at normalization;
+- read-only analytics endpoints over sales and purchases;
 - session authentication with three roles (`admin`, `office`, `factory-read`)
   guarding every API route;
 - PostgreSQL as the deployment target, with a verified copy from the v0.1
@@ -25,31 +29,89 @@ Not included: production scheduling optimization, warehouse management, truck ro
 
 ## Architecture
 
+UniOps is an operational system with a small data platform underneath it. Data
+moves in one direction through named layers:
+
+```text
+EasyBooks
+   │
+   ▼
+SOURCE CONNECTOR          known endpoints only, read-only
+   │
+   ▼
+RAW                       immutable source versions
+   │
+   ▼
+STAGING / ACCOUNTING      normalized EasyBooks data
+   │
+   ▼
+CORE / DOMAIN             canonical UniOps business entities
+   │
+   ▼
+MARTS                     analytics / read models
+   │
+   ├── Operational UI
+   ├── Finance reporting
+   └── Future AI
+```
+
+| Layer | Tables |
+| --- | --- |
+| Raw | `easybooks_raw_records` |
+| Staging / accounting | `sales_documents`, `sales_lines`, `purchase_documents`, `purchase_lines` |
+| Core / domain | `customers`, `products`, `orders`, `order_lines` |
+| Mart | none - computed on request by `app/services/analytics.py` |
+| Operational | `easybooks_sync_runs`, `users`, `user_sessions` |
+
+The governing rule is that **raw source data must survive changes in our
+interpretation of the source schema**. [Data architecture](docs/data-architecture.md)
+explains each layer, the connector boundary, lineage, and the pipeline stages.
+
 ```mermaid
 flowchart LR
     EB["EasyBooks<br/>accounting system of record"] -->|known GET/report POST only| CLI[EasyBooks sync CLI]
     FX[Sanitized fixture bundle] --> CLI
     CLI --> RAW[(Immutable raw payload versions)]
-    CLI --> ACCT[(Normalized sales and purchases)]
-    CLI --> CAT[(Canonical customers/products)]
+    RAW --> ACCT[(Normalized sales and purchases)]
+    ACCT --> CAT[(Canonical customers/products)]
+    ACCT --> MART[Analytics read models]
     UI[React order desk] -->|REST /api| API[FastAPI application]
     API --> ORD[(Operational orders/order lines)]
     API --> CAT
+    API --> MART
 ```
+
+## System of record responsibilities
+
+**EasyBooks** is the official accounting source. It owns the books. UniOps never
+creates, changes, or deletes anything in it.
+
+**UniOps** is:
+
+- the operational system of record for internal workflow - orders and their
+  movement through production and delivery, which exist before accounting does
+  and have no EasyBooks counterpart;
+- a read-only replica and normalization of EasyBooks accounting data;
+- an analytics and future decision-support layer over both.
+
+UniOps is **not** the accounting system of record. It posts no entries, computes
+no balances, and any figure it reports about accounting is derived from a stored
+EasyBooks payload that can be produced on demand.
 
 The repository is a small monorepo:
 
 - `backend/app/api`: thin HTTP routes;
-- `backend/app/services`: order and catalog business rules;
-- `backend/app/integrations/easybooks`: constrained transport, normalization, reconciliation, and idempotent sync;
+- `backend/app/services`: order and catalog business rules, plus the analytics mart;
+- `backend/app/integrations/easybooks`: constrained transport, typed contracts, normalization, reconciliation, and idempotent sync;
 - `backend/migrations`: Alembic schema history;
 - `backend/tests`: sanitized fixtures and backend/integration/API tests;
 - `frontend/src`: React/TypeScript intake and board UI;
 - `scripts/`: backup and restore;
+- `docs/data-architecture.md`: the layers, the connector boundary, and lineage;
 - `docs/operations.md`: accounts, PostgreSQL deployment, and backups;
 - `docs/easybooks-integration.md`: source-specific contract and live setup boundary.
 
-PostgreSQL is the v0.1.1 deployment target. SQLite remains the default for local development and for the test suite, and the same suite runs against PostgreSQL with `make test-pg`, so portability is a checked claim rather than an assumption. API handlers are async entry points around short synchronous database operations; this is intentionally simple for current load and should be revisited before high concurrency.
+PostgreSQL is the deployment target. SQLite remains the default for local development and for the test suite, and the same suite runs against PostgreSQL with `make test-pg`, so portability is a checked claim rather than an assumption. API handlers are async entry points around short synchronous database operations; this is intentionally simple for current load and should be revisited before high concurrency.
 
 ## Local development
 
@@ -190,6 +252,46 @@ Orders begin as `DRAFT` (shown as Waiting). The lifecycle is:
 
 Cancellation is allowed through the ready/delivery-pending stages. The service layer validates transitions, required dates, catalog references, positive quantities, and fixed-point monetary input.
 
+## Analytics API
+
+Read-only. There is no write route and there should not be. Any signed-in role may read.
+
+- `GET /api/analytics/overview`
+- `GET /api/analytics/sales`
+- `GET /api/analytics/purchases`
+
+All three take optional `from_date` and `to_date`, inclusive, and refuse an inverted window with 422 before running a query.
+
+```json
+{
+  "from_date": "2026-01-01",
+  "to_date": "2026-12-31",
+  "sales": {
+    "document_count": 111,
+    "customer_count": 20,
+    "total": "4329501592.00",
+    "vat_amount": "268526046.00",
+    "undated_document_count": 0,
+    "by_month": [{ "month": "2026-01", "amount": "1069969556.00", "document_count": 25 }]
+  },
+  "purchases": {
+    "document_count": 54,
+    "supplier_count": 10,
+    "total": "3434358898.00",
+    "vat_amount": "274791257.00",
+    "undated_document_count": 0,
+    "by_month": [{ "month": "2026-01", "amount": "698844351.00", "document_count": 8 }]
+  },
+  "sales_minus_purchases": "895142694.00"
+}
+```
+
+Money crosses the wire as a decimal string, never as a JSON float.
+
+`sales_minus_purchases` is **gross commercial flow, not profit**. Purchases in a period are not the cost of the goods sold in that period, no period matching has been done, and nothing here is a margin. It is named for exactly what it computes.
+
+Documents EasyBooks gave no date are excluded from a windowed total, because a row with no date cannot be shown to belong to the window or placed in a month. They are reported as `undated_document_count` rather than folded in silently.
+
 ## Tests and quality gates
 
 ```bash
@@ -210,11 +312,13 @@ make test-pg
 
 ## Known limitations
 
-- EasyBooks live reads need an operator-provided bearer token plus the account's `group`; no credentials are stored in the repository.
-- **Bearer tokens expire and there is no working refresh flow.** Observed lifetimes vary: a token accepted by the data API lasted 30 days, while one from `POST /api/authenticate` lasted 24 hours and was refused by the data API entirely. Credential login is implemented but **unverified end to end**; see the two-token problem in the integration doc. Someone must supply a fresh token roughly monthly, so unattended syncing will stop until they do. A rejected credential is reported clearly and never retried, and `GET /api/sync-runs` exposes run status for alerting.
+- EasyBooks live reads need the account's `group` plus either a bearer token or a username and password; no credentials are stored in the repository.
+- Credential login is **implemented and verified end to end**. UniOps performs the two-step sign-in the web client performs - `login-by-user` to discover the organisation, then `authenticate` with it - and renews a rejected token once before retrying. A token obtained without an organisation is refused by the data API, which is why the organisation step exists. An account requiring an OTP cannot sign in unattended and is refused up front. A rejected credential is reported clearly and never retried, and `GET /api/sync-runs` exposes run status for alerting.
 - The sales list, count, and detail contracts and the purchase report body all come from direct observation of the company account and have been verified live. The sales dynamic report was exercised and deliberately removed as redundant and unsafe to call.
 - EasyBooks returns an empty result rather than an error for several misconfigurations - a missing `group`, an inverted date window, an empty `listMaterialGoods`. Where UniOps can detect these it refuses instead of reporting zero rows.
-- Live ingestion is verified across full years 2024-2026 and a year boundary, with counts reconciling exactly. Only sales and purchases are ingested; no other EasyBooks entity is read.
+- Live ingestion has been run against the company account and is verified across full years 2024-2026 and a year boundary, with counts reconciling exactly. Only sales and purchases are ingested; no other EasyBooks entity is read.
+- The purchase report ends with a grand-total footer row that carries no document identity. It was previously ingested as a purchase document and doubled all-time purchase totals; it is now recognised, skipped, and counted as a reconciliation warning.
+- Purchase VAT comes from `thueGTGT`, which is a VAT **amount** in dong rather than a rate. Every observed line divides out to 0.08 of its purchase amount, but no VAT rate is inferred or stored from that.
 - Synchronous database operations target the present small-team load, not high concurrency.
 - **Sign-in has no rate limit or lockout.** Argon2id makes each attempt cost real time and an unknown username costs the same as a known one, but a determined attacker with network access can keep guessing. This is sized for three accounts on an internal network.
 - **There is no audit trail.** The database records who exists and when they last signed in, not who created or advanced which order.

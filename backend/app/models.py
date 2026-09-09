@@ -254,6 +254,7 @@ class SalesDocument(Base):
         UniqueConstraint("source_system", "source_id", name="uq_sales_source"),
         Index("ix_sales_document_date", "document_date"),
         Index("ix_sales_customer_code", "accounting_object_code"),
+        Index("ix_sales_raw_lineage", "source_raw_record_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
@@ -276,9 +277,28 @@ class SalesDocument(Base):
     recorded: Mapped[bool | None] = mapped_column(Boolean)
     normalized_hash: Mapped[str] = mapped_column(String(64))
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    # Lineage. Which immutable raw version produced this row, and which run last
+    # changed it. RESTRICT because deleting a raw version would leave a
+    # normalized row claiming a source that no longer exists.
+    source_raw_record_id: Mapped[str | None] = mapped_column(
+        ForeignKey("easybooks_raw_records.id", ondelete="RESTRICT")
+    )
+    # Null after a headers-only read, which retrieves no detail payload at all.
+    source_lines_raw_record_id: Mapped[str | None] = mapped_column(
+        ForeignKey("easybooks_raw_records.id", ondelete="RESTRICT")
+    )
+    sync_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("easybooks_sync_runs.id", ondelete="RESTRICT")
+    )
 
     lines: Mapped[list[SalesLine]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
+    )
+    source_raw_record: Mapped[EasyBooksRawRecord | None] = relationship(
+        foreign_keys=[source_raw_record_id]
+    )
+    source_lines_raw_record: Mapped[EasyBooksRawRecord | None] = relationship(
+        foreign_keys=[source_lines_raw_record_id]
     )
 
 
@@ -318,6 +338,7 @@ class PurchaseDocument(Base):
         UniqueConstraint("source_system", "source_id", name="uq_purchase_source"),
         Index("ix_purchase_document_date", "document_date"),
         Index("ix_purchase_vendor_code", "vendor_code"),
+        Index("ix_purchase_raw_lineage", "source_raw_record_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
@@ -335,10 +356,19 @@ class PurchaseDocument(Base):
     total_purchase_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     normalized_hash: Mapped[str] = mapped_column(String(64))
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    # A purchase document is normalized from one raw payload holding all its rows,
+    # so a single lineage pointer covers both header and lines.
+    source_raw_record_id: Mapped[str | None] = mapped_column(
+        ForeignKey("easybooks_raw_records.id", ondelete="RESTRICT")
+    )
+    sync_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("easybooks_sync_runs.id", ondelete="RESTRICT")
+    )
 
     lines: Mapped[list[PurchaseLine]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
+    source_raw_record: Mapped[EasyBooksRawRecord | None] = relationship()
 
 
 class PurchaseLine(Base):

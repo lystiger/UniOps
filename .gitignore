@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.db
+# Timestamped copies taken before a migration. Same real data as the database.
+*.db.pre-*
 *.xlsx
 *.xls
 *.sqlite3
