@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noEmit": true,
+    // The specs share constants.mjs and fixtures.ts with the Node scripts that
+    // seed and serve the harness, so the .mjs files have to resolve. They are
+    // not themselves typechecked; they are plain scripts, not app code.
+    "allowJs": true,
+    "checkJs": false,
+    // DOM is in lib for page.evaluate callbacks, which run in the browser; the
+    // spec bodies themselves are Node.
+    "types": ["node"]
+  },
+  "include": ["e2e", "playwright.config.ts"]
+}
