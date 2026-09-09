@@ -133,6 +133,8 @@ uv run uniops export --out uniops.xlsx \
   --from-date 2026-05-01 --to-date 2026-09-08
 ```
 
+Exported workbooks contain real customer and financial data once a live sync has run. `*.xlsx` is gitignored; keep exports out of shared locations.
+
 Six sheets: sales documents, sales lines, purchase documents, purchase lines, customers, and products. Each has a frozen header row and an autofilter. Money and quantity cells keep their `Decimal` values with the source scale rather than being written as text.
 
 The date window bounds the four transactional sheets; the catalog sheets are always complete. Documents with no date are always included, since an undated document cannot be shown to fall outside the window and silently dropping one would lose a real record.
@@ -171,13 +173,24 @@ npm run build
 
 ## Known limitations
 
-- EasyBooks live authentication requires a legitimate operator-provided token or session cookie; no credentials are stored.
-- The EasyBooks sales list, count, and detail contracts come from direct observation of the company account; the connector implements those exactly and adds no server-side pagination, because the observed UI pages the returned array client-side.
-- The purchase and sales dynamic-report response envelopes have not been directly observed; row extraction stays tolerant for those two routes only.
-- Live mode has not been exercised from this repository. Fixture mode is the executed path; a first controlled live run still needs operator-supplied credentials.
-- There is no application authentication or role model in v0.1. Deploy only on a trusted internal network until that is added.
+- EasyBooks live reads need an operator-provided bearer token plus the account's `group`; no credentials are stored in the repository.
+- **Bearer tokens expire after 30 days and there is no refresh flow.** Someone must supply a fresh token roughly monthly, so unattended syncing will stop until they do. A rejected credential is reported clearly and never retried, and `GET /api/sync-runs` exposes run status for alerting.
+- The sales list, count, and detail contracts and the purchase report body all come from direct observation of the company account and have been verified live. The sales dynamic report was exercised and deliberately removed as redundant and unsafe to call.
+- EasyBooks returns an empty result rather than an error for several misconfigurations - a missing `group`, an inverted date window, an empty `listMaterialGoods`. Where UniOps can detect these it refuses instead of reporting zero rows.
+- Live ingestion is verified across full years 2024-2026 and a year boundary, with counts reconciling exactly. Only sales and purchases are ingested; no other EasyBooks entity is read.
 - SQLite and synchronous database operations target the present small-team load, not high concurrency.
 - No production scheduling, inventory, delivery optimization, invoicing, receivable, or payment workflow is implemented yet.
+
+## Accepted risk: no application authentication
+
+UniOps v0.1 has **no application authentication, no user accounts, and no role model**. Every API route and every UI screen is reachable by anyone who can reach the process. This is a deliberate v0.1 decision, not an oversight, and it carries conditions:
+
+- deploy only on a trusted internal network, never on a public address;
+- do not expose the API through a public reverse proxy, tunnel, or port forward;
+- treat the database as containing real customer, supplier, and financial data, because after a live sync it does;
+- exported workbooks carry the same data. They are gitignored, but nothing stops them being copied elsewhere.
+
+Anyone who reaches the process can read every customer, price, invoice, and purchase, and can create or alter orders. Adding authentication is the first thing to do before UniOps is reachable by anyone outside the team.
 
 ## Recommended v0.2
 
