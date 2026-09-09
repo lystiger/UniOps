@@ -91,6 +91,23 @@ authenticated browser session into UNIOPS_EASYBOOKS_BEARER_TOKEN.
 
 Unattended production sync needs a token the system can obtain itself; until then, monitor `GET /api/sync-runs` and alert when the newest run is not `SUCCEEDED`.
 
+### Verified window coverage
+
+Sales retrieval was exercised across a range of windows against the live account. The count endpoint reconciled exactly every time, with no warnings:
+
+| Window | `sa-invoice-count` | Documents retrieved |
+|---|---:|---:|
+| 2024 full year | 227 | 227 |
+| 2025 full year | 262 | 262 |
+| 2026 full year | 111 | 111 |
+| 2025 into 2026 | 51 | 51 |
+
+Two findings follow. The token's `yearWork` claim does **not** restrict which years can be read; earlier zero-row results for prior years were caused solely by the missing `group` header. And 262 documents arriving in a single response is further confirmation that the list is not server-paginated.
+
+A full-year ingestion of 2026 - 111 sales documents each requiring its own detail read, plus purchases - completed in about 14 seconds with no failures, and repeated as 166 unchanged documents. Every sales document carried a customer code, with no orphaned documents and no duplicate line keys.
+
+An inverted window is rejected by the CLI. EasyBooks answers one with an empty result rather than an error, which would otherwise read as "no documents" instead of "bad request".
+
 ### Live run
 
 A normal live run is a complete pipeline: sales list, sales count, one sales detail read per document, raw preservation, normalization, then reconciliation. Nothing in it is operator-configured.

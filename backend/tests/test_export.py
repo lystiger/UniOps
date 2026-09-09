@@ -194,3 +194,86 @@ def test_the_export_reads_no_easybooks_api(populated, tmp_path, monkeypatch):
     summary = export_workbook(populated, tmp_path / "out.xlsx")
 
     assert summary.path.exists()
+
+
+def test_an_inverted_window_is_refused_rather_than_silently_empty(capsys):
+    """EasyBooks answers an inverted range with zero rows, not an error."""
+    import sys
+
+    from app.cli import main
+
+    argv = [
+        "uniops", "sync-easybooks", "--live",
+        "--from-date", "2026-09-08", "--to-date", "2026-05-01",
+    ]
+    original, sys.argv = sys.argv, argv
+    try:
+        with pytest.raises(SystemExit) as caught:
+            main()
+    finally:
+        sys.argv = original
+
+    assert caught.value.code == 2
+    assert "is after --to-date" in capsys.readouterr().err
+
+
+def test_an_inverted_window_is_refused_for_the_export_too(capsys, tmp_path):
+    import sys
+
+    from app.cli import main
+
+    argv = [
+        "uniops", "export", "--out", str(tmp_path / "x.xlsx"),
+        "--from-date", "2026-09-08", "--to-date", "2026-05-01",
+    ]
+    original, sys.argv = sys.argv, argv
+    try:
+        with pytest.raises(SystemExit) as caught:
+            main()
+    finally:
+        sys.argv = original
+
+    assert caught.value.code == 2
+    assert not (tmp_path / "x.xlsx").exists()
+
+
+def test_a_normal_window_reaches_the_export_untouched(monkeypatch, tmp_path):
+    """The guard must not reject a valid window. Stubbed to avoid the real database."""
+    import sys
+
+    from app import cli
+
+    seen = {}
+    monkeypatch.setattr(cli, "_export", lambda args: seen.update(vars(args)))
+
+    argv = [
+        "uniops", "export", "--out", str(tmp_path / "ok.xlsx"),
+        "--from-date", "2026-05-01", "--to-date", "2026-09-08",
+    ]
+    original, sys.argv = sys.argv, argv
+    try:
+        cli.main()
+    finally:
+        sys.argv = original
+
+    assert seen["from_date"] == date(2026, 5, 1)
+    assert seen["to_date"] == date(2026, 9, 8)
+
+
+def test_a_window_with_only_one_bound_is_accepted(monkeypatch, tmp_path):
+    import sys
+
+    from app import cli
+
+    seen = {}
+    monkeypatch.setattr(cli, "_export", lambda args: seen.update(vars(args)))
+
+    argv = ["uniops", "export", "--out", str(tmp_path / "ok.xlsx"), "--from-date", "2026-05-01"]
+    original, sys.argv = sys.argv, argv
+    try:
+        cli.main()
+    finally:
+        sys.argv = original
+
+    assert seen["from_date"] == date(2026, 5, 1)
+    assert seen["to_date"] is None

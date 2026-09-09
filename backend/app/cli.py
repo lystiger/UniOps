@@ -63,6 +63,13 @@ def main() -> None:
     export.add_argument("--to-date", type=_date)
 
     args = parser.parse_args()
+    # EasyBooks answers an inverted window with an empty result rather than an
+    # error, which reads as "no documents" instead of "bad request".
+    if args.from_date and args.to_date and args.from_date > args.to_date:
+        parser.error(
+            f"--from-date {args.from_date} is after --to-date {args.to_date}; "
+            "EasyBooks would return an empty result for that window"
+        )
     if args.command == "export":
         _export(args)
         return
