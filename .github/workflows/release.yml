@@ -1,0 +1,87 @@
+name: Release
+
+# A release is cut when the version in pyproject.toml changes on main and CI is
+# green. Nothing is pushed to the machine that runs UniOps: the repository is
+# public, so no runner and no deployment credential belongs on an internal box.
+# The tag is the deliverable, and scripts/deploy.sh pulls it from that side.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Decide
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      tag: ${{ steps.read.outputs.tag }}
+      release: ${{ steps.read.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: read
+        name: Read the version and look for its tag
+        run: |
+          set -euo pipefail
+          version="$(python3 -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")"
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "$tag already exists; nothing to release." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Will release **$tag**." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  ci:
+    # The same workflow that guards pull requests, so a tag can only come from a
+    # commit that passed it.
+    name: CI
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    uses: ./.github/workflows/ci.yml
+
+  tag:
+    name: Tag and publish
+    needs: [version, ci]
+    if: needs.version.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          previous="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          if [[ -n "$previous" ]]; then
+            range="$previous..HEAD"
+            heading="Changes since $previous"
+          else
+            range="HEAD"
+            heading="Changes"
+          fi
+          {
+            echo "$heading"
+            echo
+            git log --no-merges --format='- %s' "$range"
+            echo
+            echo "Deploy with \`scripts/deploy.sh $TAG\` on the machine that runs UniOps."
+          } > notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md --target "$GITHUB_SHA"
