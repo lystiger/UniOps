@@ -49,6 +49,14 @@ class HttpxReadOnlyTransport:
             raise EasyBooksConfigurationError(
                 "live mode requires legitimate EasyBooks bearer token or session cookie"
             )
+        # Without this header every filtered read returns an empty array instead of
+        # an error, so an unset group would look like an empty accounting period.
+        if not settings.easybooks_group:
+            raise EasyBooksConfigurationError(
+                "live mode requires UNIOPS_EASYBOOKS_GROUP; without it EasyBooks "
+                "silently returns no rows"
+            )
+        headers["group"] = settings.easybooks_group
         self._client = httpx.Client(
             base_url=settings.easybooks_base_url,
             headers=headers,
@@ -90,9 +98,13 @@ class EasyBooksClient:
         self.settings = settings
 
     def _company_id(self) -> str:
-        if not self.settings.easybooks_company_id:
-            raise EasyBooksConfigurationError("UNIOPS_EASYBOOKS_COMPANY_ID is required")
-        return self.settings.easybooks_company_id
+        """Return the configured companyID, or the empty value EasyBooks accepts.
+
+        The observed requests send an empty companyID and are scoped by the bearer
+        token's organisation instead; a populated value returns the same rows. It
+        is kept as a request dimension but is no longer required.
+        """
+        return self.settings.easybooks_company_id or ""
 
     def sales_documents(self, from_date: date, to_date: date) -> Any:
         """Read the whole matching sales list in one request.

@@ -1,14 +1,29 @@
 import asyncio
 import json
+import os
 from pathlib import Path
 
 import httpx
 import pytest
+from app.config import Settings
 from app.database import Base, get_db
 from app.integrations.easybooks.sync import FixtureBundle
 from app.main import app
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+
+@pytest.fixture(autouse=True)
+def isolate_settings_from_local_env(monkeypatch):
+    """Keep an operator's real .env out of the test suite.
+
+    Settings reads .env by default, so a populated local file silently changed
+    test outcomes—an enabled live mode made a "live reads are disabled" case fail.
+    Tests must depend only on the values they pass in.
+    """
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    for key in [name for name in os.environ if name.startswith("UNIOPS_")]:
+        monkeypatch.delenv(key, raising=False)
 
 
 class ApiClient:

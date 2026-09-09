@@ -155,7 +155,14 @@ def fetch_live_bundle(
         }
     else:
         warnings.append("sales details were not retrieved; existing normalized lines are kept")
-    purchase_rows = _extract_rows(client.purchase_report(from_date, to_date))
+    try:
+        purchase_rows = _extract_rows(client.purchase_report(from_date, to_date))
+    except Exception as exc:
+        # The purchase dynamic-report request body has never been directly observed
+        # and the endpoint rejects the current one. A broken purchase read must not
+        # discard a healthy sales read, so it degrades to a warning.
+        warnings.append(f"purchase report unavailable: {exc}")
+        purchase_rows = []
     return FixtureBundle(
         documents,
         sales_lines,

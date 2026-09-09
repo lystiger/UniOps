@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     easybooks_live_enabled: bool = False
     easybooks_base_url: str = "https://app133.easybooks.vn"
     easybooks_company_id: str | None = None
+    # Selects the EasyBooks data group/shard. Omitting it does not fail: the API
+    # returns an empty array, so live mode requires it rather than reading nothing.
+    easybooks_group: str | None = None
     easybooks_bearer_token: SecretStr | None = None
     easybooks_cookie: SecretStr | None = None
     easybooks_request_timeout_seconds: float = 20.0
@@ -24,6 +27,7 @@ class Settings(BaseSettings):
 
     @field_validator(
         "easybooks_company_id",
+        "easybooks_group",
         "easybooks_bearer_token",
         "easybooks_cookie",
         mode="before",

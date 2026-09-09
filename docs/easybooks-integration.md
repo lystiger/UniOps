@@ -16,11 +16,20 @@ Base URL: `https://app133.easybooks.vn`
 | Sales count | GET | `/v2/api/sa-invoice-count` | Bare non-negative JSON integer |
 | Sales detail | GET | `/v2/api/sa-invoice-details/by-saInvoiceID` | `sAInvoiceID=<sales document UUID>` |
 | Sales report | POST | `/api/dynamic-report/ban-hang` | `typeReport=SO_CHI_TIET_BAN_HANG` |
-| Purchase report | POST | `/api/dynamic-report/mua-hang` | Read-only dynamic report request |
+| Purchase report | POST | `/api/dynamic-report/mua-hang` | **Currently failing**; see below |
 
 All five are connector constants. None of them is operator-configurable, so there is no route for an operator to point UniOps at an unobserved endpoint.
 
 The HTTP transport rejects methods other than GET and POST. POST is allowed only for the two report routes. Timeouts and exponential retry/backoff apply to network failures, 408, 429, and 5xx responses. Authentication headers are never logged.
+
+### Request scoping
+
+Every live read is scoped by two things, neither of them the `companyID` query parameter:
+
+- the **bearer token**, whose `orgGetData`/`org` claims carry the organisation;
+- the **`group` request header** (observed value `GROUPDS2`), which selects the data group.
+
+This was established directly. With `group` present the sales list returns all 35 documents whether `companyID` is empty or populated; with `group` absent every filtered read returns an **empty array rather than an error**. A missing group is therefore indistinguishable from an empty accounting period, so live mode refuses to start without `UNIOPS_EASYBOOKS_GROUP`. `companyID` is retained as a request dimension but is no longer required, matching observed requests that send it empty.
 
 ### Sales list
 
@@ -55,7 +64,8 @@ The operator must provide legitimate access obtained through the company's norma
 ```dotenv
 UNIOPS_EASYBOOKS_LIVE_ENABLED=true
 UNIOPS_EASYBOOKS_BASE_URL=https://app133.easybooks.vn
-UNIOPS_EASYBOOKS_COMPANY_ID=operator-supplied-value
+UNIOPS_EASYBOOKS_COMPANY_ID=
+UNIOPS_EASYBOOKS_GROUP=operator-supplied-value
 
 # Provide one legitimate mechanism locally. Both are secret values.
 UNIOPS_EASYBOOKS_BEARER_TOKEN=
@@ -64,7 +74,7 @@ UNIOPS_EASYBOOKS_COOKIE=
 
 That is the whole EasyBooks configuration surface. There is no endpoint, paging, or page-size setting: every path is an observed constant.
 
-Live mode refuses to start if it is disabled, has no credential, or has no company ID. `companyID` is a request dimension, not proof of authorization. Blank `.env` entries are treated as absent, so an empty token never becomes an empty `Authorization` header.
+Live mode refuses to start if it is disabled, has no credential, or has no group. `companyID` is a request dimension, not proof of authorization. Blank `.env` entries are treated as absent, so an empty token never becomes an empty `Authorization` header.
 
 ### Live run
 
@@ -91,6 +101,12 @@ A header-only run records `mode = live-headers`, never calls the sales-detail ro
 Because a header-only run hashes a fixed "not retrieved" marker in place of lines, alternating header-only and full runs reports documents as updated on each switch. No data is lost; only the change counters move.
 
 The default live window overlaps the previous seven days because no trustworthy EasyBooks `updatedAt` field has been identified. Re-running overlapping windows is safe.
+
+### Purchase report status
+
+`POST /api/dynamic-report/mua-hang` returns HTTP 500 with a server-side `java.lang.NullPointerException` in `DynamicReportMuaHangServiceImpl.getDataDynamicReport`. The request body has never been directly observed and the current `{companyID, fromDate, toDate}` is incomplete; the server resolves the company from the token regardless. Adding the `group` header does not change it.
+
+A failing purchase read must not discard a healthy sales read, so it degrades to a retrieval warning and the run continues with no purchase rows. Fixing it needs one directly observed `mua-hang` request body.
 
 ## Fixture contract
 
