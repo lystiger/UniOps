@@ -8,9 +8,15 @@ on:
     branches: [main]
   workflow_call:
 
-# One run per ref. A new push supersedes the one still going.
+# One run per ref per caller. A new push supersedes the one still going.
+#
+# github.workflow is in the group because a reusable workflow inherits the
+# caller's ref: without it, the run release.yml starts on main and the run this
+# file's own push trigger starts on the same commit share a group and cancel
+# each other. Which one survives is a race, and losing the release's copy skips
+# the tag job and cuts no release, silently.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
