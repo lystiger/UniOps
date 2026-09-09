@@ -1,7 +1,9 @@
 import type {
   Customer,
+  InvoiceCandidate,
   NewOrderLine,
   Order,
+  OrderAccounting,
   OrderList,
   OrderStatus,
   Product,
@@ -83,4 +85,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ status }),
     }),
+  orderAccounting: (id: string) => request<OrderAccounting>(`/api/orders/${id}/accounting`),
+  invoiceCandidates: (id: string) =>
+    request<InvoiceCandidate[]>(`/api/orders/${id}/invoice-candidates`),
+  linkInvoice: (id: string, salesDocumentId: string) =>
+    request<OrderAccounting>(`/api/orders/${id}/invoice-links`, {
+      method: "POST",
+      body: JSON.stringify({ sales_document_id: salesDocumentId }),
+    }),
+  unlinkInvoice: (id: string, linkId: string) =>
+    request<OrderAccounting>(`/api/orders/${id}/invoice-links/${linkId}`, { method: "DELETE" }),
 };

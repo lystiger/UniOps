@@ -92,17 +92,21 @@ Purpose:
 This layer is a **replica, not a ledger**. UniOps does not post entries, does not
 compute balances, and is not the accounting system of record.
 
-### Core / domain — `customers`, `products`, `orders`, `order_lines`
+### Core / domain — `customers`, `products`, `orders`, `order_lines`, `order_accounting_links`
 
 Stable business entities that belong to UniOps and outlive any EasyBooks API
 change. Customers and products are canonical, carrying EasyBooks identifiers as
 attributes rather than being defined by them. Orders and order lines have no
 EasyBooks counterpart at all: they exist before accounting does.
 
+`order_accounting_links` belongs here rather than in the accounting layer: it is
+a UniOps belief about a relationship EasyBooks does not model, not a fact
+EasyBooks stated. See [Order to cash](order-to-cash.md).
+
 If EasyBooks were replaced, this layer would keep its shape and the two above it
 would be rewritten.
 
-### Marts — `app/services/analytics.py`
+### Marts — `app/services/analytics.py`, `app/services/exceptions_view.py`
 
 Derived, query-oriented read models over the accounting layer, for dashboards,
 management reporting, and later ML/AI features.
@@ -115,6 +119,12 @@ to revisit is tens of thousands of documents in a single window, not before.
 Money is summed in Python with `Decimal`, not with SQL `SUM`. SQLite has no
 decimal type and aggregates through C doubles, so a SQL sum there is float
 arithmetic on money.
+
+Accounting and payment states — `NOT_INVOICED`, `INVOICED`, `UNKNOWN` and the
+rest — are derived here too, never stored. A stored flag would go stale the
+moment EasyBooks corrected the document behind it. Where a figure cannot be
+derived because the source does not carry it, the mart returns `null` with a
+sentence saying why, rather than a zero that would read as a real answer.
 
 ### Operational — `easybooks_sync_runs`, `users`, `user_sessions`
 
@@ -130,6 +140,7 @@ record what each ingestion did; users and sessions are authentication.
 | `purchase_documents`, `purchase_lines` | STAGING / ACCOUNTING |
 | `customers`, `products` | CORE / DOMAIN |
 | `orders`, `order_lines` | CORE / DOMAIN |
+| `order_accounting_links` | CORE / DOMAIN |
 | *(no tables)* `app/services/analytics.py` | MART |
 | `easybooks_sync_runs` | OPERATIONAL |
 | `users`, `user_sessions` | OPERATIONAL |

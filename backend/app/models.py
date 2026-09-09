@@ -52,6 +52,20 @@ class UserRole(StrEnum):
     FACTORY_READ = "FACTORY_READ"
 
 
+class LinkMethod(StrEnum):
+    """How an order-to-invoice link came to exist.
+
+    Only two values are justified by the source. EasyBooks carries no sales
+    order, quote, or contract reference on any observed document - every one of
+    `sAOrderNo`, `saoderNo`, `sAQuoteID`, `contractNo` and `contractCode` is null
+    across all 147 observed lines - so there is nothing to match a UniOps order
+    number against and no reference-based method can exist.
+    """
+
+    MANUAL = "MANUAL"
+    CUSTOMER_DATE_AMOUNT = "CUSTOMER_DATE_AMOUNT"
+
+
 class SyncStatus(StrEnum):
     RUNNING = "RUNNING"
     SUCCEEDED = "SUCCEEDED"
@@ -171,6 +185,9 @@ class Order(Base):
     lines: Mapped[list[OrderLine]] = relationship(
         back_populates="order", cascade="all, delete-orphan", order_by="OrderLine.position"
     )
+    accounting_links: Mapped[list[OrderAccountingLink]] = relationship(
+        back_populates="order", cascade="all, delete-orphan"
+    )
 
 
 class OrderLine(Base):
@@ -198,6 +215,51 @@ class OrderLine(Base):
 
     order: Mapped[Order] = relationship(back_populates="lines")
     product: Mapped[Product | None] = relationship()
+
+
+class OrderAccountingLink(Base):
+    """A UniOps order and the EasyBooks invoice it became.
+
+    The link lives only in UniOps. Creating or removing one changes nothing in
+    EasyBooks and transfers no accounting ownership: it records what we believe
+    about a relationship EasyBooks does not model.
+
+    Cardinality is deliberately unconstrained beyond "the same pair only once".
+    An order may split across invoices and an invoice may cover several orders;
+    UniGreen has no order data yet to say which happens in practice, and a rigid
+    one-to-one key would be a guess that is expensive to undo.
+    """
+
+    __tablename__ = "order_accounting_links"
+    __table_args__ = (
+        UniqueConstraint("order_id", "sales_document_id", name="uq_order_accounting_link"),
+        Index("ix_order_links_order", "order_id"),
+        Index("ix_order_links_sales_document", "sales_document_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"))
+    # RESTRICT: a normalized invoice must not disappear from under a link that
+    # claims it. Unlink first, deliberately.
+    sales_document_id: Mapped[str] = mapped_column(
+        ForeignKey("sales_documents.id", ondelete="RESTRICT")
+    )
+    link_method: Mapped[LinkMethod] = mapped_column(
+        Enum(LinkMethod, native_enum=False, length=32)
+    )
+    # Null when a person picked the invoice outright rather than confirming a
+    # scored candidate. A confirmed link is never anonymous, so the evidence and
+    # the person are both recorded.
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    evidence: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    order: Mapped[Order] = relationship(back_populates="accounting_links")
+    sales_document: Mapped[SalesDocument] = relationship()
+    created_by: Mapped[User | None] = relationship()
 
 
 class EasyBooksSyncRun(Base):

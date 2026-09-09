@@ -1,4 +1,4 @@
-# UniOps v0.1.2
+# UniOps v0.1.3
 
 UniOps is the lightweight operational system of record for UniGreen's make-to-order paper converting workflow. It captures customer orders before accounting, shows their movement through production and delivery, and preserves read-only EasyBooks source data for audit and normalization.
 
@@ -6,7 +6,11 @@ EasyBooks remains the accounting system of record. UniOps never creates, changes
 
 ## Scope
 
-Included in v0.1.2:
+Included in v0.1.3:
+
+- order-to-cash visibility: an explicit link between a UniOps order and the
+  EasyBooks invoice it became, with provenance and human confirmation;
+- receivables and operational-exception read models;
 
 - a layered data platform - raw, accounting, domain, mart - with source lineage
   from every normalized row back to the exact EasyBooks payload behind it;
@@ -59,7 +63,7 @@ MARTS                     analytics / read models
 | --- | --- |
 | Raw | `easybooks_raw_records` |
 | Staging / accounting | `sales_documents`, `sales_lines`, `purchase_documents`, `purchase_lines` |
-| Core / domain | `customers`, `products`, `orders`, `order_lines` |
+| Core / domain | `customers`, `products`, `orders`, `order_lines`, `order_accounting_links` |
 | Mart | none - computed on request by `app/services/analytics.py` |
 | Operational | `easybooks_sync_runs`, `users`, `user_sessions` |
 
@@ -108,6 +112,7 @@ The repository is a small monorepo:
 - `frontend/src`: React/TypeScript intake and board UI;
 - `scripts/`: backup and restore;
 - `docs/data-architecture.md`: the layers, the connector boundary, and lineage;
+- `docs/order-to-cash.md`: order/invoice linking, receivables, and what EasyBooks does not expose;
 - `docs/operations.md`: accounts, PostgreSQL deployment, and backups;
 - `docs/easybooks-integration.md`: source-specific contract and live setup boundary.
 
@@ -259,6 +264,9 @@ Read-only. There is no write route and there should not be. Any signed-in role m
 - `GET /api/analytics/overview`
 - `GET /api/analytics/sales`
 - `GET /api/analytics/purchases`
+- `GET /api/analytics/receivables`
+- `GET /api/customers/{customer_id}/receivables`
+- `GET /api/operations/exceptions`
 
 All three take optional `from_date` and `to_date`, inclusive, and refuse an inverted window with 422 before running a query.
 
@@ -321,9 +329,23 @@ make test-pg
 - Purchase VAT comes from `thueGTGT`, which is a VAT **amount** in dong rather than a rate. Every observed line divides out to 0.08 of its purchase amount, but no VAT rate is inferred or stored from that.
 - Synchronous database operations target the present small-team load, not high concurrency.
 - **Sign-in has no rate limit or lockout.** Argon2id makes each attempt cost real time and an unknown username costs the same as a known one, but a determined attacker with network access can keep guessing. This is sized for three accounts on an internal network.
-- **There is no audit trail.** The database records who exists and when they last signed in, not who created or advanced which order.
+- **There is no general audit trail.** The database records who exists and when they last signed in, not who created or advanced which order. Accounting links are the exception: each records who confirmed it, by which method, and on what evidence.
+- **No payment or receivable settlement data exists.** EasyBooks exposes no due date, paid amount, outstanding amount, or payment reference on any observed sales document, and no payments endpoint has been observed. Outstanding, overdue, and payment status are reported as unknown rather than approximated.
 - The static frontend bundle loads without a session, because the sign-in screen is part of it. It carries no data; every route it calls is guarded.
 - No production scheduling, inventory, delivery optimization, invoicing, receivable, or payment workflow is implemented yet.
+
+## Order to cash
+
+An order and the EasyBooks invoice it became are linked explicitly:
+
+- `GET /api/orders/{order_id}/accounting` — derived accounting picture of one order
+- `GET /api/orders/{order_id}/invoice-candidates` — scored, explained candidates
+- `POST /api/orders/{order_id}/invoice-links` — confirm a link (`admin`/`office`)
+- `DELETE /api/orders/{order_id}/invoice-links/{link_id}` — remove the UniOps relationship only
+
+Matching is deterministic: the canonical customer code must agree, the invoice date must fall within seven days of the required date, and the order total must equal the invoice subtotal or total for the match to be considered strong. If more than one invoice fits, **nothing is linked** and the candidates go back to a person. No link is ever created without someone confirming it, and every link records who confirmed it, by which method, and on what evidence.
+
+**What UniOps cannot yet answer.** EasyBooks exposes no due date, no paid amount, no outstanding amount, and no payment reference on any observed sales document. So `INVOICED` is derivable and every payment-derived state is reported as `UNKNOWN`. Outstanding and overdue come back `null` with a reason attached rather than as `0.00`, because zero would assert that everything has been paid. See [Order to cash](docs/order-to-cash.md) for the full field inventory and what would unblock it.
 
 ## Authentication and roles
 

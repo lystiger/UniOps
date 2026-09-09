@@ -1,9 +1,12 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models import OrderStatus, UserRole
+from app.models import LinkMethod, OrderStatus, UserRole
+from app.services.exceptions_view import ExceptionCategory
+from app.services.order_to_cash import AccountingStatus, DueStatus, PaymentStatus
 
 
 class ApiModel(BaseModel):
@@ -113,6 +116,8 @@ class OrderRead(ApiModel):
     lines: list[OrderLineRead]
     created_at: datetime
     updated_at: datetime
+    # Derived, never stored. Absent on a single-order read that did not ask for it.
+    accounting_status: str | None = None
 
 
 class OrderList(ApiModel):
@@ -191,3 +196,136 @@ class CommercialOverviewRead(ApiModel):
     # Gross commercial flow. Deliberately not called profit: purchases in a period
     # are not the cost of the goods sold in that period.
     sales_minus_purchases: Decimal
+
+
+class InvoiceCandidateRead(ApiModel):
+    sales_document_id: str
+    source_id: str
+    invoice_number: str | None
+    invoice_series: str | None
+    document_date: date | None
+    subtotal: Decimal
+    total_amount: Decimal
+    confidence: Decimal
+    evidence: dict[str, Any]
+
+
+class LinkedInvoiceRead(ApiModel):
+    link_id: str
+    sales_document_id: str
+    source_id: str
+    invoice_number: str | None
+    invoice_series: str | None
+    document_date: date | None
+    subtotal: Decimal
+    total_amount: Decimal
+    vat_amount: Decimal
+    link_method: LinkMethod
+    confidence: Decimal | None
+    evidence: dict[str, Any] | None
+    created_by: str | None
+    # UNKNOWN until a payment source is observed. Never inferred from the invoice.
+    payment_status: PaymentStatus
+    due_date: date | None
+    due_status: DueStatus
+
+
+class OrderAccountingRead(ApiModel):
+    order_id: str
+    order_number: str
+    # The production lifecycle and the accounting state are separate machines and
+    # are reported separately. Neither is derived from the other.
+    lifecycle_status: str
+    order_total: Decimal | None
+    accounting_status: AccountingStatus
+    payment_status: PaymentStatus
+    outstanding_amount: Decimal | None
+    outstanding_status: str
+    invoices: list[LinkedInvoiceRead]
+    candidate_count: int
+
+
+class InvoiceLinkCreate(ApiModel):
+    sales_document_id: str = Field(min_length=1, max_length=36)
+
+
+class CustomerReceivableRead(ApiModel):
+    customer_id: str | None
+    customer_code: str
+    customer_name: str | None
+    invoice_count: int
+    total_invoiced: Decimal
+    oldest_invoice_date: date | None
+    newest_invoice_date: date | None
+    # Null, not zero: zero would assert the customer owes nothing.
+    outstanding_amount: Decimal | None
+    overdue_amount: Decimal | None
+
+
+class ReceivablesRead(ApiModel):
+    as_of: date
+    from_date: date | None
+    to_date: date | None
+    total_invoiced: Decimal
+    invoice_count: int
+    linked_invoice_count: int
+    unlinked_invoice_count: int
+    total_outstanding: Decimal | None
+    total_overdue: Decimal | None
+    unpaid_invoice_count: int | None
+    overdue_invoice_count: int | None
+    # Says in words why the figures above are null, so a null is never read as
+    # "nothing outstanding".
+    outstanding_status: str
+    due_status: str
+    customers: list[CustomerReceivableRead]
+
+
+class CustomerInvoiceRead(ApiModel):
+    sales_document_id: str
+    invoice_number: str | None
+    invoice_series: str | None
+    document_date: date | None
+    total_amount: Decimal
+    vat_amount: Decimal
+    paid_amount: Decimal | None
+    outstanding_amount: Decimal | None
+    payment_status: PaymentStatus
+    due_date: date | None
+    due_status: DueStatus
+    linked_order_numbers: list[str]
+
+
+class CustomerReceivableDetailRead(ApiModel):
+    customer_id: str
+    customer_name: str
+    customer_code: str | None
+    as_of: date
+    invoice_count: int
+    total_invoiced: Decimal
+    oldest_invoice_date: date | None
+    total_outstanding: Decimal | None
+    overdue_amount: Decimal | None
+    outstanding_status: str
+    due_status: str
+    invoices: list[CustomerInvoiceRead]
+
+
+class ExceptionItemRead(ApiModel):
+    category: ExceptionCategory
+    reference: str
+    detail: str
+    order_id: str | None
+    sales_document_id: str | None
+
+
+class ExceptionGroupRead(ApiModel):
+    category: ExceptionCategory
+    count: int
+    items: list[ExceptionItemRead]
+
+
+class ExceptionReportRead(ApiModel):
+    as_of: date
+    total: int
+    groups: list[ExceptionGroupRead]

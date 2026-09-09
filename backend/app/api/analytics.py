@@ -11,7 +11,12 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import read_access
 from app.database import get_db
-from app.schemas import CommercialOverviewRead, PurchaseSummaryRead, SalesSummaryRead
+from app.schemas import (
+    CommercialOverviewRead,
+    PurchaseSummaryRead,
+    ReceivablesRead,
+    SalesSummaryRead,
+)
 from app.services import analytics
 
 router = APIRouter(prefix="/analytics", tags=["analytics"], dependencies=[read_access])
@@ -58,3 +63,21 @@ async def purchases(
 ):
     _window(from_date, to_date)
     return analytics.purchase_summary(session, from_date, to_date)
+
+
+@router.get("/receivables", response_model=ReceivablesRead)
+async def receivables(
+    from_date: date | None = FromDate,
+    to_date: date | None = ToDate,
+    as_of: date | None = Query(default=None, description="Reporting date; defaults to today"),
+    session: Session = Depends(get_db),
+):
+    """What has been invoiced, and to whom.
+
+    Outstanding and overdue come back null with a reason rather than as zero.
+    EasyBooks exposes no paid amount, outstanding amount, or due date on any
+    observed sales document, and reporting 0.00 would assert that everything has
+    been paid.
+    """
+    _window(from_date, to_date)
+    return analytics.receivables(session, as_of=as_of, from_date=from_date, to_date=to_date)

@@ -239,6 +239,35 @@ The body carries `itemsPerPage: 30` and `page: 1`, so paging had to be ruled out
 
 The server ignores `page`. No page iteration is implemented. The parameter is still sent as the observed constant, and `purchase_report(page=...)` exists only so the finding can be re-verified.
 
+## What the sales payload does not carry
+
+Every field of all 111 observed sales headers and all 147 detail lines was read
+directly out of the production raw payloads. The result matters because it bounds
+what any receivables feature can honestly claim.
+
+Present and usable: `id`, `invoiceNo` (110 of 111), `invoiceSeries`, `date`,
+`postedDate`, `accountingObjectName` on the header, `accountingObjectCode` on the
+lines, and the money fields. Line `debitAccount` is `131` throughout — accounts
+receivable in the Vietnamese chart of accounts — and every document is `typeID`
+320, "Bán hàng chưa thu tiền", a credit sale.
+
+Present but null on **every** document: `mbDepositID` and `mcReceiptID` (the bank
+deposit and cash receipt references), and on every line `sAOrderNo`, `saoderNo`,
+`saoderDate`, `sAQuoteID`, `contractNo`, `contractCode`.
+
+Absent entirely: any due date, paid amount, outstanding amount, payment status,
+or payment transaction.
+
+Two consequences. There is no sales order or contract reference to match a UniOps
+order against, so order/invoice matching can only use customer, amount, and date.
+And no payment or settlement state can be derived at all — `typeName` describes
+what the document *was* when created, not whether it has since been paid, so
+reading it as "unpaid" would report every settled invoice as outstanding.
+
+No payments or receipts endpoint has been observed. None has been added, because
+guessing one would break the boundary this integration is built on. See
+[Order to cash](order-to-cash.md).
+
 ## Fixture contract
 
 Fixture mode accepts one JSON object:

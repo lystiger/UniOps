@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, UnauthorizedError } from "../api";
 import type { Order, OrderStatus } from "../types";
+import { AccountingBadge, AccountingPanel } from "./AccountingPanel";
 import { StatusBadge } from "./StatusBadge";
 
 const columns: { title: string; statuses: OrderStatus[] }[] = [
@@ -76,6 +77,7 @@ export function OrderBoard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [movingId, setMovingId] = useState("");
+  const [accountingOrder, setAccountingOrder] = useState<Order | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -171,6 +173,14 @@ export function OrderBoard({
                         <span>{isOverdue(order) ? "Overdue" : "Required"}</span>
                         <strong>{formatDue(order.required_date)}</strong>
                       </div>
+                      <button
+                        className="accounting-line"
+                        type="button"
+                        onClick={() => setAccountingOrder(order)}
+                        aria-label={`Accounting for ${order.order_number}`}
+                      >
+                        <AccountingBadge status={order.accounting_status} />
+                      </button>
                       {canWrite && nextStatus[order.status] && (
                         <button
                           className="advance-button"
@@ -187,6 +197,15 @@ export function OrderBoard({
             );
           })}
         </div>
+      )}
+      {accountingOrder && (
+        <AccountingPanel
+          order={accountingOrder}
+          canWrite={canWrite}
+          onClose={() => setAccountingOrder(null)}
+          onChanged={load}
+          onSessionLost={onSessionLost}
+        />
       )}
     </section>
   );

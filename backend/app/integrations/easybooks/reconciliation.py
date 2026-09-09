@@ -21,7 +21,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.integrations.easybooks.contracts import SalesDocumentRecord, SalesLineRecord
-from app.models import PurchaseDocument, PurchaseLine, SalesDocument, SalesLine
+from app.models import (
+    Customer,
+    Order,
+    OrderAccountingLink,
+    PurchaseDocument,
+    PurchaseLine,
+    SalesDocument,
+    SalesLine,
+)
 
 # Money arrives already rounded by EasyBooks, so a sub-unit difference is
 # rounding rather than a disagreement worth a person's attention.
@@ -55,10 +63,22 @@ class IntegrityReport:
     orphan_purchase_lines: int
     sales_documents_without_lineage: int
     purchase_documents_without_lineage: int
+    orphan_accounting_links: int = 0
+    accounting_links_with_customer_mismatch: int = 0
 
     @property
     def warnings(self) -> list[str]:
         found = []
+        if self.orphan_accounting_links:
+            found.append(
+                f"{self.orphan_accounting_links} order-invoice links point at an "
+                "order or sales document that no longer exists"
+            )
+        if self.accounting_links_with_customer_mismatch:
+            found.append(
+                f"{self.accounting_links_with_customer_mismatch} order-invoice links "
+                "join an order and an invoice belonging to different customers"
+            )
         if self.orphan_sales_lines:
             found.append(f"{self.orphan_sales_lines} sales lines have no parent document")
         if self.orphan_purchase_lines:
@@ -99,6 +119,23 @@ def check_integrity(session: Session) -> IntegrityReport:
             select(func.count()).select_from(model).where(model.source_raw_record_id.is_(None))
         )
 
+    # A link whose two sides name different customers is a genuine break: one of
+    # them is wrong. Neither side is rewritten - the warning names it and a person
+    # decides, because silently "correcting" accounting lineage is how a wrong
+    # answer becomes an invisible one.
+    mismatched = session.scalar(
+        select(func.count())
+        .select_from(OrderAccountingLink)
+        .join(Order, Order.id == OrderAccountingLink.order_id)
+        .join(Customer, Customer.id == Order.customer_id)
+        .join(SalesDocument, SalesDocument.id == OrderAccountingLink.sales_document_id)
+        .where(
+            Customer.easybooks_accounting_object_code.is_not(None),
+            SalesDocument.accounting_object_code.is_not(None),
+            Customer.easybooks_accounting_object_code != SalesDocument.accounting_object_code,
+        )
+    )
+
     return IntegrityReport(
         orphan_sales_lines=_orphans(SalesLine, SalesDocument, SalesLine.sales_document_id),
         orphan_purchase_lines=_orphans(
@@ -106,4 +143,11 @@ def check_integrity(session: Session) -> IntegrityReport:
         ),
         sales_documents_without_lineage=_missing_lineage(SalesDocument),
         purchase_documents_without_lineage=_missing_lineage(PurchaseDocument),
+        orphan_accounting_links=(
+            _orphans(OrderAccountingLink, Order, OrderAccountingLink.order_id)
+            + _orphans(
+                OrderAccountingLink, SalesDocument, OrderAccountingLink.sales_document_id
+            )
+        ),
+        accounting_links_with_customer_mismatch=mismatched,
     )
