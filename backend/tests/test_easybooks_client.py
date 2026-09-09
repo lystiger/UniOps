@@ -240,3 +240,147 @@ def test_purchase_report_posts_the_body_to_the_known_report_path():
     assert (method, path) == ("POST", PURCHASE_REPORT_PATH)
     assert params is None
     assert json_body["typeReport"] == "SO_CHI_TIET_MUA_HANG"
+
+
+# Shape of the body EasyBooks returns for a rejected credential: HTTP 500 whose
+# message carries Spring Security's access-denied path. Values are synthetic.
+AUTH_DENIED_BODY = {
+    "code": 500,
+    "status": "INTERNAL_SERVER_ERROR",
+    "message": (
+        "\nException: org.springframework.security.web.access.ExceptionTranslationFilter"
+        ".handleAccessDeniedException(ExceptionTranslationFilter.java:194)"
+    ),
+}
+
+# A genuine server fault: same status, no security markers.
+SERVICE_FAULT_BODY = {
+    "code": 500,
+    "status": "INTERNAL_SERVER_ERROR",
+    "message": (
+        "Exception: vn.example.service.impl.SomeReportServiceImpl.getData"
+        "(SomeReportServiceImpl.java:122)\nCause: java.lang.NullPointerException"
+    ),
+}
+
+
+def _transport_answering(status_code, *, body=None):
+    """A live transport whose HTTP calls are served by a stub, counting requests."""
+    import httpx
+
+    calls = []
+
+    def handle(request):
+        calls.append(request.url.path)
+        return httpx.Response(status_code, json=body if body is not None else {})
+
+    transport = _live_transport()
+    transport._client = httpx.Client(
+        transport=httpx.MockTransport(handle), base_url="https://easybooks.invalid"
+    )
+    return transport, calls
+
+
+def test_an_expired_token_reports_what_to_do_instead_of_a_raw_status_error():
+    from app.integrations.easybooks.client import EasyBooksAuthError
+
+    transport, calls = _transport_answering(401)
+
+    with pytest.raises(EasyBooksAuthError, match="most likely expired"):
+        transport.request("GET", SALES_LIST_PATH)
+
+    assert "UNIOPS_EASYBOOKS_BEARER_TOKEN" in str(
+        pytest.raises(EasyBooksAuthError, transport.request, "GET", SALES_LIST_PATH).value
+    )
+
+
+def test_a_rejected_credential_is_not_retried():
+    transport, calls = _transport_answering(401)
+
+    with pytest.raises(EasyBooksConfigurationError):
+        transport.request("GET", SALES_LIST_PATH)
+
+    # One attempt only; retrying a stale token just repeats the rejection.
+    assert len(calls) == 1
+
+
+def test_a_forbidden_response_points_at_access_rather_than_the_token():
+    from app.integrations.easybooks.client import EasyBooksAuthError
+
+    transport, calls = _transport_answering(403)
+
+    with pytest.raises(EasyBooksAuthError, match="not permitted") as caught:
+        transport.request("GET", SALES_LIST_PATH)
+
+    assert "expired" not in str(caught.value)
+    assert len(calls) == 1
+
+
+def test_an_auth_failure_never_echoes_the_credential():
+    from app.integrations.easybooks.client import EasyBooksAuthError
+
+    transport, _ = _transport_answering(401)
+
+    with pytest.raises(EasyBooksAuthError) as caught:
+        transport.request("GET", SALES_LIST_PATH)
+
+    assert "operator-supplied" not in str(caught.value)
+    assert "Bearer" not in str(caught.value)
+
+
+def test_the_cli_reports_an_expired_token_as_a_refusal_not_a_traceback():
+    from app.integrations.easybooks.client import EasyBooksAuthError
+
+    # The CLI catches EasyBooksConfigurationError, so the auth error must be one.
+    assert issubclass(EasyBooksAuthError, EasyBooksConfigurationError)
+
+
+def test_server_errors_are_still_retried():
+    import httpx
+
+    transport, calls = _transport_answering(500, body=SERVICE_FAULT_BODY)
+    transport._max_retries = 2
+
+    with pytest.raises(httpx.HTTPStatusError):
+        transport.request("GET", SALES_LIST_PATH)
+
+    assert len(calls) == 3
+
+
+def test_a_rejected_credential_returned_as_http_500_is_still_recognised():
+    """EasyBooks answers a bad token with 500, so the status code is not enough."""
+    from app.integrations.easybooks.client import EasyBooksAuthError
+
+    transport, calls = _transport_answering(500, body=AUTH_DENIED_BODY)
+
+    with pytest.raises(EasyBooksAuthError, match="most likely expired") as caught:
+        transport.request("GET", SALES_LIST_PATH)
+
+    assert "UNIOPS_EASYBOOKS_BEARER_TOKEN" in str(caught.value)
+    assert len(calls) == 1
+
+
+def test_a_genuine_server_fault_is_not_reported_as_an_expired_token():
+    from app.integrations.easybooks.client import EasyBooksAuthError
+
+    transport, _ = _transport_answering(500, body=SERVICE_FAULT_BODY)
+    transport._max_retries = 0
+
+    with pytest.raises(Exception) as caught:
+        transport.request("GET", SALES_LIST_PATH)
+
+    assert not isinstance(caught.value, EasyBooksAuthError)
+
+
+def test_an_auth_failure_never_leaks_the_response_body():
+    """The body carries the account email and a server stack trace."""
+    from app.integrations.easybooks.client import EasyBooksAuthError
+
+    transport, _ = _transport_answering(500, body=AUTH_DENIED_BODY)
+
+    with pytest.raises(EasyBooksAuthError) as caught:
+        transport.request("GET", SALES_LIST_PATH)
+
+    message = str(caught.value)
+    assert "springframework" not in message
+    assert "Exception" not in message

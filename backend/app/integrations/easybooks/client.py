@@ -23,6 +23,17 @@ PURCHASE_REPORT_PATH = "/api/dynamic-report/mua-hang"
 # UTC would roll over seven hours early and send the wrong business date.
 EASYBOOKS_TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
 
+# EasyBooks answers a rejected credential with HTTP 500, not 401, so the status
+# code alone cannot identify one. Its body carries Spring Security's access-denied
+# path, which a genuine business fault (a service NullPointerException, say) does
+# not. Both an absent and a malformed token were observed producing these markers.
+AUTH_FAILURE_MARKERS = (
+    "exceptiontranslationfilter",
+    "accessdeniedexception",
+    "authenticationexception",
+    "org.springframework.security",
+)
+
 PURCHASE_REPORT_TYPE = "SO_CHI_TIET_MUA_HANG"
 PURCHASE_REPORT_FILE_NAME = "SoNhatKiMuaHang.xlsx"
 PURCHASE_REPORT_TYPE_CONFIG = 11
@@ -37,6 +48,14 @@ def business_today() -> date:
 
 class EasyBooksConfigurationError(RuntimeError):
     pass
+
+
+class EasyBooksAuthError(EasyBooksConfigurationError):
+    """The credential was rejected. A subclass so the CLI reports it as a refusal.
+
+    Kept distinct from a transport failure because retrying a rejected credential
+    only repeats the rejection.
+    """
 
 
 class Transport(Protocol):
@@ -98,6 +117,10 @@ class HttpxReadOnlyTransport:
         for attempt in range(self._max_retries + 1):
             try:
                 response = self._client.request(method, path, params=params, json=json_body)
+                # A rejected credential is terminal: retrying sends the same stale
+                # token three more times and still fails, with a raw status error.
+                if self._is_auth_failure(response):
+                    raise EasyBooksAuthError(self._auth_failure_message(response.status_code))
                 if response.status_code not in {408, 429} and response.status_code < 500:
                     response.raise_for_status()
                     return response.json()
@@ -107,6 +130,44 @@ class HttpxReadOnlyTransport:
                     raise
                 time.sleep(min(0.5 * (2**attempt), 4.0))
         raise RuntimeError("unreachable")
+
+    @staticmethod
+    def _is_auth_failure(response: httpx.Response) -> bool:
+        """Decide whether a response is a rejected credential.
+
+        401 and 403 are taken at face value. A 500 counts only when its body shows
+        Spring Security's access-denied path, so an ordinary server fault is still
+        treated as retryable rather than being reported as an expired token.
+        """
+        if response.status_code in {401, 403}:
+            return True
+        if response.status_code != 500:
+            return False
+        try:
+            body = response.text.lower()
+        except Exception:  # a body that cannot be read proves nothing either way
+            return False
+        return any(marker in body for marker in AUTH_FAILURE_MARKERS)
+
+    @staticmethod
+    def _auth_failure_message(status_code: int) -> str:
+        """Explain a rejected credential without echoing it or the response body.
+
+        The body is deliberately not quoted: EasyBooks includes the account email
+        and a server stack trace in it.
+        """
+        if status_code == 403:
+            return (
+                "EasyBooks refused the request (HTTP 403). The credential is "
+                "recognised but not permitted to read this data; check the account's "
+                "access rather than replacing the token."
+            )
+        return (
+            f"EasyBooks rejected the credential (HTTP {status_code}). The bearer "
+            "token has most likely expired - they last 30 days. Copy a current one "
+            "from an authenticated browser session into "
+            "UNIOPS_EASYBOOKS_BEARER_TOKEN."
+        )
 
 
 class EasyBooksClient:

@@ -76,6 +76,22 @@ That is the whole EasyBooks configuration surface. There is no endpoint, paging,
 
 Live mode refuses to start if it is disabled, has no credential, or has no group. `companyID` is a request dimension, not proof of authorization. Blank `.env` entries are treated as absent, so an empty token never becomes an empty `Authorization` header.
 
+### Credential expiry
+
+EasyBooks bearer tokens last **30 days** from issue, and using one does not extend it. There is no refresh flow, so an operator must currently supply a fresh token roughly monthly.
+
+Detecting a rejected credential takes more than a status code: EasyBooks answers both an absent and a malformed token with **HTTP 500, not 401**. What distinguishes it is the body, which carries Spring Security's `ExceptionTranslationFilter` / access-denied path; a genuine server fault, such as the report `NullPointerException`, carries a service class name instead.
+
+The transport therefore treats 401 and 403 at face value, and a 500 as an auth failure only when those markers are present. Such a failure is terminal and never retried, because resending a stale token only repeats the rejection. The reported message names the environment variable to update and quotes neither the token nor the response body, which contains the account email and a server stack trace.
+
+```
+EasyBooks live read refused: EasyBooks rejected the credential (HTTP 500). The bearer
+token has most likely expired - they last 30 days. Copy a current one from an
+authenticated browser session into UNIOPS_EASYBOOKS_BEARER_TOKEN.
+```
+
+Unattended production sync needs a token the system can obtain itself; until then, monitor `GET /api/sync-runs` and alert when the newest run is not `SUCCEEDED`.
+
 ### Live run
 
 A normal live run is a complete pipeline: sales list, sales count, one sales detail read per document, raw preservation, normalization, then reconciliation. Nothing in it is operator-configured.
