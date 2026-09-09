@@ -110,7 +110,14 @@ Running the same command again is safe. The second run reports unchanged documen
 
 Live mode is disabled by default and has not been authenticated or exercised in this repository. See [EasyBooks integration](docs/easybooks-integration.md) before enabling it.
 
-Sales retrieval pages only when the operator supplies the observed page parameter names; unset means one request, as verified. The `sa-invoice-count` companion read is advisory and bounds the paging loop. Because the sales-detail route is still unknown, `--headers-only` runs the list, count, and purchase reads against a live account without it:
+A live run reads the observed contracts end to end: the sales list, the sales count, one sales detail per document, then raw preservation, normalization, and reconciliation. Every EasyBooks path is a connector constant, and the sales list is fetched in a single request because EasyBooks returns the whole matching array and paginates it client-side.
+
+```bash
+uv run uniops sync-easybooks --live \
+  --from-date 2026-08-01 --to-date 2026-08-31
+```
+
+`--headers-only` remains as a diagnostic that runs the list, count, and purchase reads without the sales-detail route:
 
 ```bash
 uv run uniops sync-easybooks --live --headers-only \
@@ -150,9 +157,9 @@ npm run build
 ## Known limitations
 
 - EasyBooks live authentication requires a legitimate operator-provided token or session cookie; no credentials are stored.
-- The exact sales-detail read endpoint was not supplied. Full live sales ingestion refuses to proceed until its already-observed path is configured; `--headers-only` covers everything else.
-- EasyBooks paging parameter names were never observed. Paging is operator-configured and off by default; UniOps will not guess them.
-- EasyBooks response envelopes, including the sales count shape, have not been verified against a live account; fixture mode is the verified path.
+- The EasyBooks sales list, count, and detail contracts come from direct observation of the company account; the connector implements those exactly and adds no server-side pagination, because the observed UI pages the returned array client-side.
+- The purchase and sales dynamic-report response envelopes have not been directly observed; row extraction stays tolerant for those two routes only.
+- Live mode has not been exercised from this repository. Fixture mode is the executed path; a first controlled live run still needs operator-supplied credentials.
 - There is no application authentication or role model in v0.1. Deploy only on a trusted internal network until that is added.
 - SQLite and synchronous database operations target the present small-team load, not high concurrency.
 - No production scheduling, inventory, delivery optimization, invoicing, receivable, or payment workflow is implemented yet.

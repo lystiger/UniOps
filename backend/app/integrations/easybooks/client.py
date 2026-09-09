@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 SALES_LIST_PATH = "/v2/api/sa-invoice-objects-filter"
 SALES_COUNT_PATH = "/v2/api/sa-invoice-count"
+SALES_DETAIL_PATH = "/v2/api/sa-invoice-details/by-saInvoiceID"
 SALES_REPORT_PATH = "/api/dynamic-report/ban-hang"
 PURCHASE_REPORT_PATH = "/api/dynamic-report/mua-hang"
 
@@ -93,47 +94,22 @@ class EasyBooksClient:
             raise EasyBooksConfigurationError("UNIOPS_EASYBOOKS_COMPANY_ID is required")
         return self.settings.easybooks_company_id
 
-    @property
-    def sales_page_size(self) -> int | None:
-        return self.settings.easybooks_sales_page_size
+    def sales_documents(self, from_date: date, to_date: date) -> Any:
+        """Read the whole matching sales list in one request.
 
-    def paging_enabled(self) -> bool:
-        """True only when the operator configured an observed page size."""
-        return self.sales_page_size is not None
-
-    def _page_params(self, page_index: int) -> dict[str, Any]:
-        """Translate a zero-based page counter into observed query parameters.
-
-        EasyBooks paging parameter names were never observed, so they must be
-        supplied by the operator. UniOps refuses to guess them.
+        EasyBooks returns every matching document in a single plain JSON array;
+        its own UI paginates that array client-side and sends no paging query
+        parameters. UniOps therefore issues exactly one request per window.
         """
-        size = self.sales_page_size
-        if size is None:
-            raise EasyBooksConfigurationError("sales pagination is not enabled")
-        cursor_param = self.settings.easybooks_sales_page_param
-        size_param = self.settings.easybooks_sales_page_size_param
-        if not cursor_param or not size_param:
-            raise EasyBooksConfigurationError(
-                "sales pagination requires the observed page and page-size parameter names; "
-                "UniOps will not guess them"
-            )
-        if self.settings.easybooks_sales_page_mode == "offset":
-            cursor = page_index * size
-        else:
-            cursor = self.settings.easybooks_sales_first_page + page_index
-        return {cursor_param: cursor, size_param: size}
-
-    def sales_documents(
-        self, from_date: date, to_date: date, *, page_index: int | None = None
-    ) -> Any:
-        params: dict[str, Any] = {
-            "companyID": self._company_id(),
-            "fromDate": from_date.isoformat(),
-            "toDate": to_date.isoformat(),
-        }
-        if page_index is not None:
-            params.update(self._page_params(page_index))
-        return self.transport.request("GET", SALES_LIST_PATH, params=params)
+        return self.transport.request(
+            "GET",
+            SALES_LIST_PATH,
+            params={
+                "companyID": self._company_id(),
+                "fromDate": from_date.isoformat(),
+                "toDate": to_date.isoformat(),
+            },
+        )
 
     def sales_count(self, from_date: date, to_date: date) -> Any:
         return self.transport.request(
@@ -170,14 +146,9 @@ class EasyBooksClient:
         )
 
     def sales_lines(self, document_id: str) -> Any:
-        path = self.settings.easybooks_sales_detail_path
-        if not path:
-            raise EasyBooksConfigurationError(
-                "sales detail path is not known; configure an observed read-only path"
-            )
-        if "{document_id}" in path:
-            path = path.replace("{document_id}", document_id)
-            params = {"companyID": self._company_id()}
-        else:
-            params = {"companyID": self._company_id(), "id": document_id}
-        return self.transport.request("GET", path, params=params)
+        """Read the detail lines of one sales document.
+
+        The observed contract keys on ``sAInvoiceID`` alone; no companyID is
+        sent because the endpoint was never observed to require one.
+        """
+        return self.transport.request("GET", SALES_DETAIL_PATH, params={"sAInvoiceID": document_id})

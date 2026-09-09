@@ -64,3 +64,78 @@ def test_sales_reconciliation_allows_rounding_but_flags_material_difference(
 def test_invalid_decimal_is_rejected():
     with pytest.raises(ValueError, match="invalid decimal"):
         source_decimal("not-money")
+
+
+def test_aggregate_total_metadata_is_never_a_document_amount(fixture_payload):
+    source = fixture_payload["sales_documents"][0]
+    assert source["total"] == "99999999999.00"
+
+    document = normalize_sales_document(source)
+
+    assert document["subtotal"] == Decimal("1500000.00")
+    assert document["discount_amount"] == Decimal("0")
+    assert document["vat_amount"] == Decimal("150000.00")
+    assert document["total_amount"] == Decimal("1650000.00")
+    assert Decimal("99999999999.00") not in document.values()
+
+
+def test_a_null_aggregate_total_on_later_rows_changes_nothing():
+    # EasyBooks puts a result-set aggregate on the first row and null on the rest.
+    first = {"id": "doc-1", "totalAmount": "100.00", "totalAllAmount": "110.00", "total": "330.00"}
+    later = {"id": "doc-2", "totalAmount": "100.00", "totalAllAmount": "110.00", "total": None}
+
+    assert normalize_sales_document(first)["total_amount"] == Decimal("110.00")
+    assert normalize_sales_document(later)["total_amount"] == Decimal("110.00")
+
+
+def test_exponent_form_zero_survives_every_document_money_field():
+    document = normalize_sales_document(
+        {
+            "id": "doc-1",
+            "totalAmount": "0E-10",
+            "totalDiscountAmount": "0E-10",
+            "totalVATAmount": "0E-10",
+            "totalAllAmount": "0E-10",
+        }
+    )
+
+    assert document["subtotal"] == Decimal("0")
+    assert document["discount_amount"] == Decimal("0")
+    assert document["vat_amount"] == Decimal("0")
+    assert document["total_amount"] == Decimal("0")
+    assert str(document["subtotal"]) == "0"
+
+
+def test_zero_document_vat_is_not_replaced_by_the_legacy_alias():
+    document = normalize_sales_document({"id": "doc-1", "totalVATAmount": 0, "totalVAT": "150.00"})
+    assert document["vat_amount"] == Decimal("0")
+
+    fallback = normalize_sales_document({"id": "doc-1", "totalVAT": "150.00"})
+    assert fallback["vat_amount"] == Decimal("150.00")
+
+
+def test_detail_lines_with_null_identity_bind_to_the_requested_document():
+    lines = normalize_sales_lines(
+        "doc-1",
+        [
+            {"id": None, "sAInvoiceID": None, "materialGoodsCode": "P-1", "amount": "10.00"},
+            {"id": None, "sAInvoiceID": None, "materialGoodsCode": "P-2", "amount": "20.00"},
+        ],
+    )
+    other = normalize_sales_lines(
+        "doc-2",
+        [{"id": None, "sAInvoiceID": None, "materialGoodsCode": "P-1", "amount": "10.00"}],
+    )
+
+    assert [line["source_line_id"] for line in lines] == [None, None]
+    assert len({line["source_line_key"] for line in lines}) == 2
+    # The same line payload under a different parent gets a different identity.
+    assert lines[0]["source_line_key"] != other[0]["source_line_key"]
+
+
+def test_repeated_normalization_of_the_same_detail_is_stable():
+    payload = [{"id": None, "sAInvoiceID": None, "materialGoodsCode": "P-1", "amount": "10.00"}]
+    first = normalize_sales_lines("doc-1", payload)
+    second = normalize_sales_lines("doc-1", payload)
+
+    assert first[0]["source_line_key"] == second[0]["source_line_key"]

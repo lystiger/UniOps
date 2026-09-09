@@ -62,12 +62,14 @@ class FixtureBundle:
         return cls(documents, lines, purchases)
 
 
-ROW_ENVELOPE_KEYS = ("data", "result", "results", "items", "content", "rows", "pageData")
-COUNT_ENVELOPE_KEYS = ("count", "total", "totalCount", "totalRow", "totalRows", "totalResult")
+# The sales list is an observed plain JSON array. These envelope keys exist only
+# for the two endpoints whose response shape has not been directly observed: the
+# purchase dynamic report and the sales detail read.
+ROW_ENVELOPE_KEYS = ("data", "result", "results", "items", "content", "rows")
 
 
 def _find_rows(response: Any) -> list[dict[str, Any]] | None:
-    """Locate the row list in a response envelope. An empty list is a valid answer."""
+    """Locate the row list in a response. An empty list is a valid answer."""
     if isinstance(response, list):
         return response
     if isinstance(response, dict):
@@ -88,10 +90,11 @@ def _extract_rows(response: Any) -> list[dict[str, Any]]:
 
 
 def _extract_count(response: Any) -> int | None:
-    """Read a document count from the companion count endpoint.
+    """Read the document count returned by ``sa-invoice-count``.
 
-    The response envelope has not been verified against a live account, so every
-    unrecognised shape yields None rather than a guessed number.
+    The observed contract is a bare non-negative JSON integer. A numeric string
+    is accepted because that costs nothing; every other shape yields None rather
+    than a guessed number.
     """
     if isinstance(response, bool):
         return None
@@ -100,33 +103,18 @@ def _extract_count(response: Any) -> int | None:
     if isinstance(response, str):
         text = response.strip()
         return int(text) if text.isdigit() else None
-    if isinstance(response, dict):
-        for key in (*COUNT_ENVELOPE_KEYS, "data", "result", "value"):
-            if key not in response:
-                continue
-            nested = _extract_count(response[key])
-            if nested is not None:
-                return nested
-    if isinstance(response, list) and len(response) == 1:
-        return _extract_count(response[0])
     return None
-
-
-def _document_key(row: dict[str, Any]) -> str:
-    """Stable per-page dedupe key; falls back to the payload when id is absent."""
-    source_id = row.get("id")
-    if source_id in (None, ""):
-        return f"payload:{payload_hash(row)}"
-    return str(source_id)
 
 
 def fetch_sales_documents(
     client: EasyBooksClient, from_date: date, to_date: date
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """Read the sales list, paging only when the operator configured paging.
+    """Read the complete sales list for the window in one request.
 
-    The companion count endpoint is advisory: it bounds the paging loop and
-    reports disagreement, but a count failure never aborts ingestion.
+    ``sa-invoice-objects-filter`` returns every matching document as a plain JSON
+    array; EasyBooks paginates it client-side, so no paging request is made. The
+    companion count read is a completeness check: disagreement is recorded as a
+    reconciliation warning, and a count failure never aborts ingestion.
     """
     warnings: list[str] = []
     expected: int | None = None
@@ -137,51 +125,12 @@ def fetch_sales_documents(
     if expected is None and not warnings:
         warnings.append("sales count response was not a recognised number")
 
-    if not client.paging_enabled():
-        documents = _extract_rows(client.sales_documents(from_date, to_date))
-        warnings.extend(_count_warnings(len(documents), expected, paged=False))
-        return documents, warnings
-
-    page_size = client.sales_page_size
-    if page_size is None:  # unreachable via paging_enabled; guarded explicitly
-        raise ValueError("sales paging enabled without a page size")
-    max_pages = client.settings.easybooks_sales_max_pages
-    documents: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for page_index in range(max_pages):
-        rows = _extract_rows(client.sales_documents(from_date, to_date, page_index=page_index))
-        if not rows:
-            break
-        fresh = [row for row in rows if _document_key(row) not in seen]
-        if not fresh:
-            # The page repeated documents already collected. Continuing would loop
-            # forever against an endpoint that ignores the paging parameters.
-            warnings.append(
-                f"sales page {page_index} returned only already-seen documents; paging stopped"
-            )
-            break
-        seen.update(_document_key(row) for row in fresh)
-        documents.extend(fresh)
-        if len(rows) < page_size:
-            break
-        if expected is not None and len(documents) >= expected:
-            break
-    else:
+    documents = _extract_rows(client.sales_documents(from_date, to_date))
+    if expected is not None and len(documents) != expected:
         warnings.append(
-            f"sales paging stopped at the {max_pages}-page cap; the window may be incomplete"
+            f"sales count reported {expected} documents but {len(documents)} were retrieved"
         )
-
-    warnings.extend(_count_warnings(len(documents), expected, paged=True))
     return documents, warnings
-
-
-def _count_warnings(retrieved: int, expected: int | None, *, paged: bool) -> list[str]:
-    if expected is None or retrieved == expected:
-        return []
-    detail = f"sales count reported {expected} documents but {retrieved} were retrieved"
-    if not paged and retrieved < expected:
-        detail += "; the sales list is likely paginated and paging is not configured"
-    return [detail]
 
 
 def fetch_live_bundle(

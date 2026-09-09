@@ -4,21 +4,49 @@
 
 EasyBooks is the accounting system of record. UniOps v0.1 only reads known endpoints and stores derived copies. The integration contains no create, update, delete, browser automation, endpoint discovery, or company-ID-only authorization assumption.
 
-Live mode is opt-in and currently **not verified**. Fixture ingestion is fully functional without a live account.
+Live mode is opt-in and has not yet been exercised against a live account from this repository. Fixture ingestion is fully functional without one.
 
-## Known endpoints
+## Observed endpoints
 
 Base URL: `https://app133.easybooks.vn`
 
 | Purpose | Method | Path | Notes |
 |---|---:|---|---|
-| Sales list | GET | `/v2/api/sa-invoice-objects-filter` | Uses date window and configured `companyID` |
-| Sales count | GET | `/v2/api/sa-invoice-count` | Companion count read |
+| Sales list | GET | `/v2/api/sa-invoice-objects-filter` | Returns the complete matching array; no server pagination |
+| Sales count | GET | `/v2/api/sa-invoice-count` | Bare non-negative JSON integer |
+| Sales detail | GET | `/v2/api/sa-invoice-details/by-saInvoiceID` | `sAInvoiceID=<sales document UUID>` |
 | Sales report | POST | `/api/dynamic-report/ban-hang` | `typeReport=SO_CHI_TIET_BAN_HANG` |
 | Purchase report | POST | `/api/dynamic-report/mua-hang` | Read-only dynamic report request |
-| Sales detail | GET | operator-configured | Exact observed path was not provided; UniOps will not invent one |
 
-The HTTP transport rejects methods other than GET and POST. POST is allowed only for the two known report routes. Timeouts and exponential retry/backoff apply to network failures, 408, 429, and 5xx responses. Authentication headers are never logged.
+All five are connector constants. None of them is operator-configurable, so there is no route for an operator to point UniOps at an unobserved endpoint.
+
+The HTTP transport rejects methods other than GET and POST. POST is allowed only for the two report routes. Timeouts and exponential retry/backoff apply to network failures, 408, 429, and 5xx responses. Authentication headers are never logged.
+
+### Sales list
+
+Observed query dimensions: `accountingObjectID`, `currencyID`, `fromDate`, `toDate`, `status`, `keySearch`, `typeId`, `companyID`. UniOps sends `companyID`, `fromDate`, and `toDate`.
+
+The response is a plain JSON array containing **all** matching sales documents. EasyBooks paginates that array **client-side**: a filtered result of 35 documents displayed 10 rows per page, and moving from UI page 1 to page 2 added no `page`, `offset`, `limit`, `itemsPerPage`, or any other paging parameter to the request. UniOps therefore issues exactly one sales list request per window and implements no server-side paging. If a future direct observation shows server pagination exists, that is when to add it—not before.
+
+### Sales count
+
+`sa-invoice-count` takes the same filter dimensions and returns a bare non-negative JSON integer (observed: `35`). `_extract_count` reads that integer, tolerates a numeric string because that costs nothing, and declines every other shape rather than guessing a number out of an invented envelope.
+
+The count is a completeness check:
+
+```
+retrieved_sales_document_count == reported_count
+```
+
+A difference is never silently accepted. It is recorded as a sync-run reconciliation warning naming both numbers, and no documents are discarded. The warning does not attribute the difference to pagination, because the list is not paginated. A count read that fails or returns an unrecognised shape produces its own warning and ingestion continues.
+
+### Sales detail
+
+```
+GET /v2/api/sa-invoice-details/by-saInvoiceID?sAInvoiceID=<document.id>
+```
+
+The UUID comes from `sa-invoice-objects-filter[].id`. No `companyID` is sent; the endpoint was never observed to require one. The earlier generic `id=<document_id>` form was not the real contract and has been removed.
 
 ## Configuration
 
@@ -32,38 +60,15 @@ UNIOPS_EASYBOOKS_COMPANY_ID=operator-supplied-value
 # Provide one legitimate mechanism locally. Both are secret values.
 UNIOPS_EASYBOOKS_BEARER_TOKEN=
 UNIOPS_EASYBOOKS_COOKIE=
-
-# An already-observed GET route; use {document_id} if the ID belongs in the path.
-UNIOPS_EASYBOOKS_SALES_DETAIL_PATH=
 ```
 
-Live mode refuses to start if it is disabled, has no credential, has no company ID, or attempts sales details without an operator-configured path. `companyID` is a request dimension, not proof of authorization. Blank `.env` entries are treated as absent, so an empty token never becomes an empty `Authorization` header.
+That is the whole EasyBooks configuration surface. There is no endpoint, paging, or page-size setting: every path is an observed constant.
 
-### Sales list pagination
+Live mode refuses to start if it is disabled, has no credential, or has no company ID. `companyID` is a request dimension, not proof of authorization. Blank `.env` entries are treated as absent, so an empty token never becomes an empty `Authorization` header.
 
-EasyBooks paging parameters were **not** among the observed query dimensions, so UniOps does not guess their names. Leaving the page size unset keeps the verified behaviour of one unpaginated sales list request.
+### Live run
 
-```dotenv
-# Unset page size = single request. Set all three to enable paging.
-UNIOPS_EASYBOOKS_SALES_PAGE_SIZE=
-UNIOPS_EASYBOOKS_SALES_PAGE_PARAM=
-UNIOPS_EASYBOOKS_SALES_PAGE_SIZE_PARAM=
-
-# offset: cursor = page_index * page_size. page: cursor = first_page + page_index.
-UNIOPS_EASYBOOKS_SALES_PAGE_MODE=offset
-UNIOPS_EASYBOOKS_SALES_FIRST_PAGE=1
-UNIOPS_EASYBOOKS_SALES_MAX_PAGES=200
-```
-
-Setting a page size without both parameter names is a configuration error, not a guess. Paging only adds query parameters to the already-known sales list GET; it introduces no new path and no new method.
-
-The paging loop stops on the first of: an empty page, a page shorter than the page size, the document total reported by `sa-invoice-count`, a page containing only already-collected documents, or the page cap. The repeated-page guard means an endpoint that silently ignores the configured parameters degrades to a single page with a warning instead of looping forever.
-
-### Sales count
-
-`sa-invoice-count` is advisory. Its response envelope is unverified, so `_extract_count` accepts a bare number, a numeric string, or a `count`/`total`/`totalCount`/`totalRow`/`totalRows`/`totalResult` field (optionally nested under `data`/`result`/`value`) and otherwise returns nothing rather than a guessed number. A count read that fails or is unrecognised produces a warning and ingestion continues.
-
-A count larger than the number of retrieved documents is recorded as a reconciliation warning. When paging is not configured, that warning says explicitly that the list is probably paginated.
+A normal live run is a complete pipeline: sales list, sales count, one sales detail read per document, raw preservation, normalization, then reconciliation. Nothing in it is operator-configured.
 
 Example after legitimate configuration:
 
@@ -74,7 +79,7 @@ uv run uniops sync-easybooks --live \
 
 ### Header-only live reads
 
-The sales-detail route is still unknown, so a full live read cannot run. `--headers-only` performs the sales list, sales count, and purchase report reads without touching the detail route, which is enough to validate authentication, the date window, paging, and count agreement against a real account:
+`--headers-only` is a diagnostic. It performs the sales list, sales count, and purchase report reads without touching the detail route, which isolates authentication, the date window, and count agreement from detail-read behaviour when validating against a real account for the first time:
 
 ```bash
 uv run uniops sync-easybooks --live --headers-only \
@@ -99,13 +104,15 @@ Fixture mode accepts one JSON object:
 }
 ```
 
-`backend/tests/fixtures/easybooks_bundle.json` is intentionally synthetic. It includes exponent-form zero (`0E-10`), a sales detail whose `id` and `sAInvoiceID` are null, and a service purchase with zero unit price but non-zero purchase value.
+`backend/tests/fixtures/easybooks_bundle.json` is intentionally synthetic. It includes exponent-form zero (`0E-10`), an aggregate `total` that must not be read as a document amount, a sales detail whose `id` and `sAInvoiceID` are null, and a service purchase with zero unit price but non-zero purchase value.
 
 ## Normalization and identity
 
 ### Sales
 
-Sales headers require the stable source `id`; it becomes `sales_documents.source_id`. Details are associated with the document ID used to request them—never with nullable line `sAInvoiceID`.
+Sales headers require the stable source `id`; it becomes `sales_documents.source_id`. Details are associated with the document ID used in the `sAInvoiceID` request parameter—never with the detail response's own `id` or `sAInvoiceID`, both of which have been observed as null.
+
+Document-level money comes from `totalAmount` (subtotal), `totalDiscountAmount`, `totalVATAmount` (VAT), and `totalAllAmount` (grand total). The list also carries a `total` field: that is **result-set/report metadata**, not a document amount. EasyBooks populates it with a large aggregate on the first returned row and leaves it `null` on the rest, so UniOps never normalizes it into a document's financial totals.
 
 Line identity uses:
 
@@ -151,11 +158,11 @@ Before anyone claims live integration works:
 
 1. confirm the configured account and company are authorized through normal EasyBooks access;
 2. run a narrow `--headers-only` window in a non-production UniOps database and confirm the sales list, count, and purchase report respond;
-3. confirm whether the sales list is paginated; if it is, configure the observed page parameter names and re-run until the retrieved count matches `sa-invoice-count` with no warnings;
-4. confirm the exact previously observed sales-detail GET route and response envelope, then re-run without `--headers-only`;
+3. confirm the retrieved document total matches `sa-invoice-count` with no reconciliation warning;
+4. re-run without `--headers-only` and confirm one sales-detail read per document;
 5. compare sales count/list/detail and purchase report row counts with EasyBooks UI;
 6. inspect raw payload redaction and normalized Decimal/date fields;
-7. review reconciliation warnings, including count disagreement and paging warnings;
+7. review reconciliation warnings, including any count disagreement;
 8. repeat the same window and verify all documents report unchanged;
 9. record the executed command and results without credentials.
 

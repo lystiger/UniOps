@@ -1,7 +1,16 @@
 from copy import deepcopy
+from datetime import date
 from decimal import Decimal
 
-from app.integrations.easybooks.sync import FixtureBundle, sync_bundle
+from app.config import Settings
+from app.integrations.easybooks.client import (
+    PURCHASE_REPORT_PATH,
+    SALES_COUNT_PATH,
+    SALES_DETAIL_PATH,
+    SALES_LIST_PATH,
+    EasyBooksClient,
+)
+from app.integrations.easybooks.sync import FixtureBundle, fetch_live_bundle, sync_bundle
 from app.models import (
     Customer,
     EasyBooksRawRecord,
@@ -140,3 +149,166 @@ def test_retrieval_warnings_are_counted_on_the_sync_run(session, fixture_bundle)
 
     assert run.reconciliation_warnings == 1
     assert run.documents_created == 2
+
+
+class _LiveTransportStub:
+    """Serves the three observed sales reads plus the purchase report."""
+
+    def __init__(self, documents, details, count, purchase_rows=()):
+        self.documents = documents
+        self.details = details
+        self.count = count
+        self.purchase_rows = list(purchase_rows)
+        self.calls = []
+
+    def request(self, method, path, *, params=None, json_body=None):
+        self.calls.append((method, path, params, json_body))
+        if path == SALES_COUNT_PATH:
+            return self.count
+        if path == SALES_LIST_PATH:
+            return self.documents
+        if path == SALES_DETAIL_PATH:
+            return self.details[params["sAInvoiceID"]]
+        if path == PURCHASE_REPORT_PATH:
+            return self.purchase_rows
+        raise AssertionError(f"unexpected path {path}")
+
+
+def _live_stub():
+    documents = [
+        {
+            "id": "11111111-1111-1111-1111-111111111111",
+            "companyID": "fixture-company",
+            "typeID": "SA_INVOICE",
+            "date": "2026-08-10T00:00:00+07:00",
+            "noBook": "BH-9001",
+            "accountingObjectCode": "KH-FIXTURE-09",
+            "accountingObjectName": "Sanitized Customer Nine",
+            "totalAmount": "200000.00",
+            "totalDiscountAmount": "0E-10",
+            "totalVATAmount": "20000.00",
+            "totalAllAmount": "220000.00",
+            "total": "440000.00",
+            "currencyID": "VND",
+        },
+        {
+            "id": "22222222-2222-2222-2222-222222222222",
+            "companyID": "fixture-company",
+            "typeID": "SA_INVOICE",
+            "date": "2026-08-11T00:00:00+07:00",
+            "noBook": "BH-9002",
+            "accountingObjectCode": "KH-FIXTURE-09",
+            "accountingObjectName": "Sanitized Customer Nine",
+            "totalAmount": "200000.00",
+            "totalDiscountAmount": "0E-10",
+            "totalVATAmount": "20000.00",
+            "totalAllAmount": "220000.00",
+            "total": None,
+            "currencyID": "VND",
+        },
+    ]
+    # Detail rows carry null id and null sAInvoiceID, as observed.
+    details = {
+        document["id"]: [
+            {
+                "id": None,
+                "sAInvoiceID": None,
+                "materialGoodsCode": f"PAPER-FIX-{index}",
+                "materialGoodsName": "Sanitized converted paper",
+                "unitName": "kg",
+                "quantity": "100.0000",
+                "unitPrice": "2000.0000",
+                "amount": "200000.00",
+                "discountAmount": "0E-10",
+                "vATAmount": "20000.00",
+            }
+        ]
+        for index, document in enumerate(documents)
+    }
+    return _LiveTransportStub(documents, details, count=2)
+
+
+def _live_client(transport):
+    return EasyBooksClient(transport, Settings(easybooks_company_id="fixture-company"))
+
+
+def test_live_bundle_reads_list_count_and_one_detail_per_document(session):
+    transport = _live_stub()
+    bundle = fetch_live_bundle(_live_client(transport), date(2026, 8, 1), date(2026, 8, 31))
+
+    detail_calls = [call for call in transport.calls if call[1] == SALES_DETAIL_PATH]
+    assert [call[2] for call in detail_calls] == [
+        {"sAInvoiceID": "11111111-1111-1111-1111-111111111111"},
+        {"sAInvoiceID": "22222222-2222-2222-2222-222222222222"},
+    ]
+    assert len([call for call in transport.calls if call[1] == SALES_LIST_PATH]) == 1
+    assert len([call for call in transport.calls if call[1] == SALES_COUNT_PATH]) == 1
+    assert bundle.warnings == []
+
+    run = sync_bundle(session, bundle, mode="live")
+
+    assert run.status == SyncStatus.SUCCEEDED
+    assert run.documents_created == 2
+    assert run.reconciliation_warnings == 0
+    assert _count(session, SalesLine) == 2
+
+
+def test_live_lines_attach_to_the_document_used_to_request_them(session):
+    bundle = fetch_live_bundle(_live_client(_live_stub()), date(2026, 8, 1), date(2026, 8, 31))
+    sync_bundle(session, bundle, mode="live")
+
+    for source_id in (
+        "11111111-1111-1111-1111-111111111111",
+        "22222222-2222-2222-2222-222222222222",
+    ):
+        document = session.scalar(select(SalesDocument).where(SalesDocument.source_id == source_id))
+        assert [line.source_line_id for line in document.lines] == [None]
+        # The aggregate `total` never becomes a document amount.
+        assert document.total_amount == Decimal("220000.00")
+
+
+def test_repeated_live_sync_over_the_same_window_is_idempotent(session):
+    window = (date(2026, 8, 1), date(2026, 8, 31))
+    first = sync_bundle(
+        session, fetch_live_bundle(_live_client(_live_stub()), *window), mode="live"
+    )
+    raw_count = _count(session, EasyBooksRawRecord)
+    line_ids = sorted(session.scalars(select(SalesLine.id)))
+
+    second = sync_bundle(
+        session, fetch_live_bundle(_live_client(_live_stub()), *window), mode="live"
+    )
+
+    assert first.documents_created == 2
+    assert second.documents_created == 0
+    assert second.documents_unchanged == 2
+    assert _count(session, EasyBooksRawRecord) == raw_count
+    assert sorted(session.scalars(select(SalesLine.id))) == line_ids
+
+
+def test_a_count_that_disagrees_with_the_list_is_recorded_as_a_warning(session):
+    transport = _live_stub()
+    transport.count = 35
+    bundle = fetch_live_bundle(_live_client(transport), date(2026, 8, 1), date(2026, 8, 31))
+
+    run = sync_bundle(session, bundle, mode="live")
+
+    assert bundle.warnings == ["sales count reported 35 documents but 2 were retrieved"]
+    assert run.reconciliation_warnings == 1
+    # The discrepancy is reported, not silently accepted by discarding documents.
+    assert run.documents_created == 2
+
+
+def test_headers_only_live_read_skips_the_detail_route(session):
+    transport = _live_stub()
+    bundle = fetch_live_bundle(
+        _live_client(transport), date(2026, 8, 1), date(2026, 8, 31), include_lines=False
+    )
+
+    assert not [call for call in transport.calls if call[1] == SALES_DETAIL_PATH]
+    assert bundle.sales_lines_available is False
+
+    run = sync_bundle(session, bundle, mode="live-headers")
+
+    assert run.documents_created == 2
+    assert _count(session, SalesLine) == 0

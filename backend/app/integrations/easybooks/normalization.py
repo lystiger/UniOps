@@ -58,7 +58,27 @@ def _text(value: Any) -> str | None:
     return result or None
 
 
+def _sales_vat_amount(source: dict[str, Any]) -> Any:
+    """Prefer the observed per-document VAT field over the legacy alias.
+
+    ``totalVATAmount`` is the observed document VAT. ``totalVAT`` is only read
+    when the observed key is absent, so a genuine zero is never mistaken for a
+    missing value.
+    """
+    if "totalVATAmount" in source:
+        return source["totalVATAmount"]
+    return source.get("totalVAT")
+
+
 def normalize_sales_document(source: dict[str, Any]) -> dict[str, Any]:
+    """Normalize one row of the observed sales list.
+
+    Document-level money comes from ``totalAmount``, ``totalDiscountAmount``,
+    ``totalVATAmount``, and ``totalAllAmount``. The list also carries a ``total``
+    field, but that is result-set/report metadata: EasyBooks populates it with an
+    aggregate on the first row and leaves it null on the rest, so it is never read
+    as a document amount.
+    """
     source_id = _text(source.get("id"))
     if not source_id:
         raise NormalizationError("sales document is missing stable id")
@@ -79,7 +99,7 @@ def normalize_sales_document(source: dict[str, Any]) -> dict[str, Any]:
         "currency_id": _text(source.get("currencyID")),
         "subtotal": source_decimal(source.get("totalAmount")),
         "discount_amount": source_decimal(source.get("totalDiscountAmount")),
-        "vat_amount": source_decimal(source.get("totalVATAmount") or source.get("totalVAT")),
+        "vat_amount": source_decimal(_sales_vat_amount(source)),
         "total_amount": source_decimal(source.get("totalAllAmount")),
         "recorded": source.get("recorded") if isinstance(source.get("recorded"), bool) else None,
     }

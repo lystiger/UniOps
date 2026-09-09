@@ -15,6 +15,7 @@
       "totalDiscountAmount": "0E-10",
       "totalVATAmount": "150000.00",
       "totalAllAmount": "1650000.00",
+      "total": "99999999999.00",
       "recorded": true,
       "currencyID": "VND"
     }

@@ -32,7 +32,10 @@ def main() -> None:
     sync.add_argument(
         "--headers-only",
         action="store_true",
-        help="live only: read sales headers and purchases without the sales-detail route",
+        help=(
+            "live only: diagnostic read of sales headers, count, and purchases "
+            "without the sales-detail route"
+        ),
     )
     args = parser.parse_args()
     if args.headers_only and args.fixture:
