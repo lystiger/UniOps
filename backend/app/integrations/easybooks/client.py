@@ -20,6 +20,9 @@ PURCHASE_REPORT_PATH = "/api/dynamic-report/mua-hang"
 # Exchanges credentials for a bearer token. A POST that creates no business
 # data, so it does not widen the read-only boundary.
 AUTHENTICATE_PATH = "/api/authenticate"
+# The web client calls this first: it reports whether the account needs an OTP
+# and which organisations it may sign in against.
+PRE_LOGIN_PATH = "/api/login-by-user"
 
 # Observed success key is unverified across deployments, so accept the usual
 # JHipster spellings and refuse rather than guess when none is present.
@@ -47,13 +50,46 @@ PURCHASE_REPORT_ITEMS_PER_PAGE = 30
 PURCHASE_REPORT_FIRST_PAGE = 1
 
 
-def _token_from(payload: Any) -> str:
-    """Read the bearer token out of an authenticate response."""
+def _org_from_trees(details: Any) -> str:
+    """Pick the organisation to sign in against from the pre-login response.
+
+    The web client lets a person choose from a tree. Unattended, only an
+    unambiguous single organisation can be chosen; anything else must be
+    configured rather than guessed.
+    """
+    trees = details.get("orgTrees") if isinstance(details, dict) else None
+    candidates: list[str] = []
+    if isinstance(trees, list):
+        for node in trees:
+            if not isinstance(node, dict):
+                continue
+            parent = node.get("parent")
+            value = parent.get("id") if isinstance(parent, dict) else node.get("id")
+            if isinstance(value, str) and value.strip():
+                candidates.append(value.strip())
+    unique = sorted(set(candidates))
+    if len(unique) == 1:
+        return unique[0]
+    raise EasyBooksAuthError(
+        f"cannot choose an EasyBooks organisation automatically ({len(unique)} offered); "
+        "set UNIOPS_EASYBOOKS_ORG to the org claim of a working token"
+    )
+
+
+def _token_from(response: Any) -> str:
+    """Read the bearer token from an authenticate response body or header.
+
+    The web client accepts either, so both are honoured.
+    """
+    payload = response.json() if getattr(response, "content", None) else None
     if isinstance(payload, dict):
         for key in TOKEN_RESPONSE_KEYS:
             value = payload.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
+    header = getattr(response, "headers", {}).get("Authorization", "")
+    if header.startswith("Bearer ") and header[7:].strip():
+        return header[7:].strip()
     received = sorted(payload) if isinstance(payload, dict) else type(payload).__name__
     raise EasyBooksAuthError(
         f"EasyBooks authenticate response carried no recognisable token; got {received}"
@@ -129,6 +165,7 @@ class HttpxReadOnlyTransport:
             timeout=settings.easybooks_request_timeout_seconds,
         )
         self._max_retries = settings.easybooks_max_retries
+        self._settings = settings
         if "Authorization" not in headers and self._credentials is not None:
             self._log_in()
 
@@ -141,7 +178,11 @@ class HttpxReadOnlyTransport:
         json_body: dict[str, Any] | None = None,
     ) -> Any:
         method = method.upper()
-        if method == "POST" and path not in {PURCHASE_REPORT_PATH, AUTHENTICATE_PATH}:
+        if method == "POST" and path not in {
+            PURCHASE_REPORT_PATH,
+            AUTHENTICATE_PATH,
+            PRE_LOGIN_PATH,
+        }:
             raise EasyBooksConfigurationError(f"POST is not allowed for EasyBooks path {path}")
         if method not in {"GET", "POST"}:
             raise EasyBooksConfigurationError(f"{method} is not allowed for EasyBooks")
@@ -179,16 +220,36 @@ class HttpxReadOnlyTransport:
             raise EasyBooksConfigurationError("no EasyBooks credentials are configured")
         username, password = self._credentials
         logger.info("requesting a new EasyBooks token", extra={"source": "easybooks"})
+        credentials = {"username": username, "password": password, "rememberMe": False}
+
+        # Signing in without an organisation yields a token the data API refuses:
+        # it carries no org/orgGetData/yearWork scoping. The org must be supplied.
+        pre_login = self._client.post(PRE_LOGIN_PATH, json=credentials)
+        if self._is_auth_failure(pre_login) or pre_login.status_code >= 400:
+            raise EasyBooksAuthError(self._bad_credentials_message())
+        details = pre_login.json() if pre_login.content else {}
+        if isinstance(details, dict) and details.get("isOTP"):
+            raise EasyBooksAuthError(
+                "this EasyBooks account requires a one-time password, so it cannot "
+                "sign in unattended. Configure UNIOPS_EASYBOOKS_BEARER_TOKEN instead, "
+                "or use an account without OTP."
+            )
+        org = self._settings.easybooks_org or _org_from_trees(details)
+
         response = self._client.post(
             AUTHENTICATE_PATH,
-            json={"username": username, "password": password, "rememberMe": False},
+            json={**credentials, "org": org, "otp": False, "secretCode": ""},
         )
         if self._is_auth_failure(response) or response.status_code >= 400:
-            raise EasyBooksAuthError(
-                "EasyBooks rejected the configured username and password. Check "
-                "UNIOPS_EASYBOOKS_USERNAME and UNIOPS_EASYBOOKS_PASSWORD."
-            )
-        self._client.headers["Authorization"] = f"Bearer {_token_from(response.json())}"
+            raise EasyBooksAuthError(self._bad_credentials_message())
+        self._client.headers["Authorization"] = f"Bearer {_token_from(response)}"
+
+    @staticmethod
+    def _bad_credentials_message() -> str:
+        return (
+            "EasyBooks rejected the configured username and password. Check "
+            "UNIOPS_EASYBOOKS_USERNAME and UNIOPS_EASYBOOKS_PASSWORD."
+        )
 
     @staticmethod
     def _is_auth_failure(response: httpx.Response) -> bool:

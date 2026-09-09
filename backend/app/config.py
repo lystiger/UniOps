@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     # after a rejection, instead of an operator pasting one every 30 days.
     easybooks_username: str | None = None
     easybooks_password: SecretStr | None = None
+    # The organisation to sign in against, as sent by the web client's login and
+    # carried by a working token's `org` claim. Discovered from the login step
+    # when the account has exactly one organisation.
+    easybooks_org: str | None = None
     easybooks_request_timeout_seconds: float = 20.0
     easybooks_max_retries: int = 3
     easybooks_sync_overlap_days: int = 7
@@ -36,6 +40,7 @@ class Settings(BaseSettings):
         "easybooks_cookie",
         "easybooks_username",
         "easybooks_password",
+        "easybooks_org",
         mode="before",
     )
     @classmethod

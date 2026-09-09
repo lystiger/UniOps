@@ -94,21 +94,34 @@ A token is fetched at startup when none is configured, and renewed **once** when
 
 Use a dedicated EasyBooks user rather than a person's login: a personal account ties the sync to someone's password changes and departure. In a real deployment the password belongs in a secret store, not a checked-out `.env`.
 
-#### The two-token problem
+#### Why signing in needs an organisation
 
-Two different EasyBooks tokens have been observed, and only one of them is accepted by the data API:
+Two different tokens exist, and only one is accepted by the data API:
 
-| | Working token | `/api/authenticate` token |
+| | Working token | Token from a bare `/api/authenticate` |
 |---|---|---|
 | Lifetime | 30 days | 24 hours |
 | Claims | `sub`, `org`, `orgGetData`, `yearWork`, `isDependent`, `auth` | `sub`, `username`, `userId`, `companyId`, `authorities` |
 | `/v2/api/...` reads | accepted | rejected, HTTP 500 access denied |
 
-The rejected token was not clock-expired at the time; the server refused it. The claim sets differ entirely, and the accepted token carries exactly the organisation and working-year scoping the v2 API needs.
+The difference is the organisation. Reading the web client's own bundle showed the login payload it sends is not just credentials:
 
-The likely explanation is that `/api/authenticate` issues a first-stage token and a further step - selecting the company and working year - exchanges it for the org-scoped token. That step has not been observed, so the login implemented here obtains a token that may not be sufficient on its own.
+```
+{username, password, rememberMe, org, admin, otp, secretCode}
+```
 
-Until that second step is observed and implemented, unattended syncing is not solved: an operator still supplies a working token by hand. Do not assume the credential path works because the configuration exists.
+Signing in without `org` yields a token carrying no organisation scoping, which the data API refuses. That is why an otherwise valid token was rejected while still inside its validity window.
+
+The client performs two steps, and UniOps reproduces them:
+
+1. `POST /api/login-by-user` with the credentials, answering with `isOTP` and `orgTrees`;
+2. `POST /api/authenticate` with the credentials plus the chosen `org`, answering with the token in `id_token` or in the `Authorization` response header. Both are read.
+
+The organisation is taken from `UNIOPS_EASYBOOKS_ORG` when set, otherwise from the pre-login response when the account offers exactly one. An ambiguous choice is refused rather than guessed, naming the setting to configure. The value is the `org` claim of any working token.
+
+An account requiring a one-time password cannot sign in unattended, so `isOTP` is refused up front with an explanation rather than a failed authenticate.
+
+`login-by-user` and `authenticate` are the only POSTs permitted besides the purchase report, and neither creates business data.
 
 ### Credential expiry
 
