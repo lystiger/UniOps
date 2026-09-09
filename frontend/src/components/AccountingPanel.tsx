@@ -2,6 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { api, UnauthorizedError } from "../api";
 import type { AccountingStatus, InvoiceCandidate, Order, OrderAccounting } from "../types";
 
+const accountingMeta: Record<
+  AccountingStatus,
+  { label: string; symbol: string; tone: "draft" | "pending" | "accepted" }
+> = {
+  NOT_INVOICED: { label: "Not invoiced", symbol: "●", tone: "draft" },
+  INVOICE_CANDIDATE: { label: "Invoice candidate", symbol: "●", tone: "pending" },
+  INVOICED: { label: "Invoiced", symbol: "✓", tone: "accepted" },
+};
+
 const accountingLabels: Record<AccountingStatus, string> = {
   NOT_INVOICED: "Not invoiced",
   INVOICE_CANDIDATE: "Invoice candidate",
@@ -17,9 +26,19 @@ const paymentLabels: Record<string, string> = {
 
 export function AccountingBadge({ status }: { status: AccountingStatus | null }) {
   if (!status) return null;
+  const meta = accountingMeta[status] ?? {
+    label: status,
+    symbol: "●",
+    tone: "draft" as const,
+  };
   return (
-    <span className={`accounting-badge accounting-${status.toLowerCase()}`}>
-      {accountingLabels[status]}
+    <span
+      className={`accounting-badge accounting-${status.toLowerCase()} accounting-tone-${meta.tone}`}
+    >
+      <span className="accounting-symbol" aria-hidden="true">
+        {meta.symbol}
+      </span>
+      <span>{meta.label}</span>
     </span>
   );
 }
@@ -92,10 +111,10 @@ export function AccountingPanel({
       <div className="accounting-panel">
         <header>
           <div>
-            <p className="eyebrow">Order to cash</p>
+            <p className="eyebrow">04 / FINANCE · Order to cash</p>
             <h2>{order.order_number}</h2>
           </div>
-          <button className="nav-item" type="button" onClick={onClose}>
+          <button className="secondary-button" type="button" onClick={onClose}>
             Close
           </button>
         </header>

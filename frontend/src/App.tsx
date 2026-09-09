@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { AccountMenu } from "./components/AccountMenu";
+import { DataView } from "./components/DataView";
+import { FinanceView } from "./components/FinanceView";
 import { Login } from "./components/Login";
 import { NewOrder } from "./components/NewOrder";
 import { OrderBoard } from "./components/OrderBoard";
+import { OverviewView } from "./components/OverviewView";
 import { canWrite, type User } from "./types";
 
-type View = "board" | "new";
+type View = "board" | "new" | "overview" | "finance" | "data";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -22,7 +25,7 @@ export default function App() {
       .finally(() => setChecking(false));
   }, []);
 
-  // A session can end while the board is open, so any route that answers 401
+  // A session can end while any view is open, so any route that answers 401
   // returns the whole app to sign-in rather than showing an error on a page the
   // caller can no longer load.
   const handleSessionLost = useCallback(() => {
@@ -31,7 +34,14 @@ export default function App() {
   }, []);
 
   if (checking) {
-    return <div className="loading-state">Checking your session…</div>;
+    return (
+      <div className="loading-state-screen">
+        <div className="loading-indicator">
+          <span className="live-dot pulse" aria-hidden="true" />
+          <span>Verifying UniOps session…</span>
+        </div>
+      </div>
+    );
   }
   if (!user) {
     return <Login onSignedIn={setUser} />;
@@ -42,16 +52,37 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="brand" type="button" onClick={() => setView("board")}>
-          <span className="brand-mark" aria-hidden="true">U</span>
-          <span>
-            <strong>UniOps</strong>
-            <small>Order desk · 07:00–18:00</small>
-          </span>
-        </button>
-        <nav aria-label="Primary">
+        <div className="topbar-brand-section">
+          <button className="brand" type="button" onClick={() => setView("board")}>
+            <span className="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 64 64" className="brand-icon">
+                <rect width="64" height="64" rx="14" fill="#176b3a" />
+                <path d="M18 18v20c0 9 5 14 14 14s14-5 14-14V18h-9v20c0 4-1 6-5 6s-5-2-5-6V18z" fill="#fff" />
+                <path d="M32 9c7 1 11 5 12 11-7 0-11-4-12-11z" fill="#b9df70" />
+              </svg>
+            </span>
+            <div className="brand-text">
+              <span className="brand-logo-text">
+                Uni<span className="brand-green-accent">-Green</span>
+                <span className="brand-slash">/</span>
+                <span className="brand-ops-label">OPS</span>
+              </span>
+              <small className="brand-site-caption">Hưng Yên · 07:00–18:00</small>
+            </div>
+          </button>
+        </div>
+
+        <nav className="topbar-nav" aria-label="Primary">
+          <button
+            className={view === "overview" ? "nav-item active" : "nav-item"}
+            type="button"
+            onClick={() => setView("overview")}
+          >
+            Overview
+          </button>
           <button
             className={view === "board" ? "nav-item active" : "nav-item"}
+            type="button"
             onClick={() => setView("board")}
           >
             Order board
@@ -59,24 +90,55 @@ export default function App() {
           {writer && (
             <button
               className={view === "new" ? "nav-item active" : "nav-item"}
+              type="button"
               onClick={() => setView("new")}
             >
               + New order
             </button>
           )}
+          <button
+            className={view === "finance" ? "nav-item active" : "nav-item"}
+            type="button"
+            onClick={() => setView("finance")}
+          >
+            Finance
+          </button>
+          <button
+            className={view === "data" ? "nav-item active" : "nav-item"}
+            type="button"
+            onClick={() => setView("data")}
+          >
+            Data
+          </button>
         </nav>
-        <AccountMenu user={user} onSignedOut={handleSessionLost} />
+
+        <div className="topbar-actions">
+          <div className="site-badge" title="Facility status: Active production">
+            <span className="live-dot" aria-hidden="true" />
+            <span className="site-text">Hưng Yên · LIVE</span>
+          </div>
+          <AccountMenu user={user} onSignedOut={handleSessionLost} />
+        </div>
       </header>
 
       <main>
-        {view === "board" || !writer ? (
+        {view === "overview" && (
+          <OverviewView
+            onNavigateOrders={() => setView("board")}
+            onNewOrder={() => setView("new")}
+            canWrite={writer}
+            onSessionLost={handleSessionLost}
+          />
+        )}
+        {view === "board" && (
           <OrderBoard
             refreshKey={boardVersion}
             canWrite={writer}
             onNewOrder={() => setView("new")}
             onSessionLost={handleSessionLost}
           />
-        ) : (
+        )}
+        {view === "new" && writer && (
           <NewOrder
             onCreated={() => {
               setBoardVersion((version) => version + 1);
@@ -85,6 +147,10 @@ export default function App() {
             onSessionLost={handleSessionLost}
           />
         )}
+        {view === "finance" && (
+          <FinanceView onNavigateOrders={() => setView("board")} />
+        )}
+        {view === "data" && <DataView />}
       </main>
     </div>
   );

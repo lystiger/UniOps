@@ -126,9 +126,10 @@ export function OrderBoard({
     <section className="board-page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Today’s production view</p>
+          <p className="eyebrow">01 / OPERATIONS · Production overview</p>
           <h1>Order board</h1>
-          <p>{orders.length} active orders · <strong>{dueCount} overdue</strong></p>
+          <p className="heading-sub">Tổng quan sản xuất &amp; tiến độ đơn hàng</p>
+          <p className="heading-meta">{orders.length} active orders · <strong>{dueCount} overdue</strong></p>
         </div>
         <div className="board-actions">
           <label className="search-box">

@@ -25,11 +25,19 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
   return (
     <section className="sign-in-page">
       <form className="sign-in-card" onSubmit={submit}>
-        <span className="brand-mark" aria-hidden="true">
-          U
-        </span>
+        <div className="sign-in-brand">
+          <svg viewBox="0 0 64 64" className="brand-icon" aria-hidden="true">
+            <rect width="64" height="64" rx="14" fill="#176b3a" />
+            <path d="M18 18v20c0 9 5 14 14 14s14-5 14-14V18h-9v20c0 4-1 6-5 6s-5-2-5-6V18z" fill="#fff" />
+            <path d="M32 9c7 1 11 5 12 11-7 0-11-4-12-11z" fill="#b9df70" />
+          </svg>
+          <span className="brand-wordmark">
+            Uni<span className="brand-green-accent">-Green</span> <span className="brand-ops-slash">/</span> <span className="brand-ops-label">OPS</span>
+          </span>
+        </div>
+        <p className="eyebrow sign-in-eyebrow">00 / AUTHENTICATION · INTERNAL ACCESS</p>
         <h1>UniOps</h1>
-        <p className="sign-in-lead">Sign in to reach the order desk.</p>
+        <p className="sign-in-lead">Sign in to reach the order desk &amp; factory operations.</p>
         {error && (
           <div className="message error" role="alert">
             {error}

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { api, UnauthorizedError } from "../api";
 import type { Customer, NewOrderLine, Product } from "../types";
 
@@ -36,7 +36,7 @@ export function NewOrder({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function loadCatalog() {
+  const loadCatalog = useCallback(async () => {
     try {
       const [customerItems, productItems] = await Promise.all([api.customers(), api.products()]);
       setCustomers(customerItems);
@@ -48,11 +48,11 @@ export function NewOrder({
       }
       setError(reason instanceof Error ? reason.message : "Could not load the catalog");
     }
-  }
+  }, [onSessionLost]);
 
   useEffect(() => {
     loadCatalog();
-  }, []);
+  }, [loadCatalog]);
 
   function updateLine(index: number, change: Partial<NewOrderLine>) {
     setLines((items) => items.map((line, position) => position === index ? { ...line, ...change } : line));
@@ -99,9 +99,10 @@ export function NewOrder({
     <section className="new-order-page">
       <div className="page-heading compact">
         <div>
-          <p className="eyebrow">Secretary intake</p>
+          <p className="eyebrow">02 / SALES · Secretary intake</p>
           <h1>New order</h1>
-          <p>Capture what the customer needs. Production planning comes next.</p>
+          <p className="heading-sub">Tiếp nhận đơn hàng mới</p>
+          <p className="heading-meta">Capture what the customer needs. Production planning comes next.</p>
         </div>
       </div>
 
@@ -235,8 +236,9 @@ function QuickCatalog({ customers, products, reload }: { customers: Customer[]; 
 
   return (
     <aside className="catalog-panel">
-      <p className="eyebrow">Quick setup</p>
+      <p className="eyebrow">02 / CATALOG · Quick setup</p>
       <h2>Catalog</h2>
+      <p className="heading-sub">Danh mục khách &amp; sản phẩm</p>
       <p>{customers.length} customers · {products.length} products</p>
       {message && <div className="message success" role="status">{message}</div>}
       {failure && <div className="message error" role="alert">{failure}</div>}
