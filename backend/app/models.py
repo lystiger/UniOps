@@ -46,11 +46,63 @@ class OrderStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class UserRole(StrEnum):
+    ADMIN = "ADMIN"
+    OFFICE = "OFFICE"
+    FACTORY_READ = "FACTORY_READ"
+
+
 class SyncStatus(StrEnum):
     RUNNING = "RUNNING"
     SUCCEEDED = "SUCCEEDED"
     PARTIAL = "PARTIAL"
     FAILED = "FAILED"
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("username", name="uq_user_username"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    username: Mapped[str] = mapped_column(String(64))
+    full_name: Mapped[str | None] = mapped_column(String(255))
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole, native_enum=False, length=20))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    sessions: Mapped[list[UserSession]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserSession(Base):
+    """A signed-in browser.
+
+    Only the SHA-256 of the cookie value is stored, so a database copy cannot be
+    replayed as a live session the way a stored raw token could.
+    """
+
+    __tablename__ = "user_sessions"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_user_session_token"),
+        Index("ix_user_sessions_user", "user_id"),
+        Index("ix_user_sessions_expires", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    token_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship(back_populates="sessions")
 
 
 class Customer(Base):
@@ -309,7 +361,10 @@ class PurchaseLine(Base):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=Decimal("0"))
     purchase_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     discount_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
-    vat_rate: Mapped[Decimal | None] = mapped_column(Numeric(8, 4))
+    # `thueGTGT` on the EasyBooks purchase report is the VAT amount in dong, not
+    # a percentage. It was modelled as a rate and stored as NUMERIC(8,4), which
+    # SQLite accepted silently and PostgreSQL rejects as a field overflow.
+    vat_amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
     warehouse_code: Mapped[str | None] = mapped_column(String(100))
     description: Mapped[str | None] = mapped_column(Text)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

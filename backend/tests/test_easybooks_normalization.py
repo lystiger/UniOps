@@ -12,6 +12,7 @@ from app.integrations.easybooks.normalization import (
     sales_customer_code,
     source_decimal,
 )
+from app.models import PurchaseDocument, PurchaseLine
 
 
 def test_decimal_handling_normalizes_exponent_zero():
@@ -204,3 +205,37 @@ def test_grouping_still_separates_distinct_documents():
     assert sorted(grouped) == ["doc-1", "doc-2"]
     assert len(grouped["doc-1"]) == 2
     assert len(grouped["doc-2"]) == 1
+
+
+def test_purchase_vat_is_read_as_an_amount_not_a_percentage():
+    """`thueGTGT` carries VAT in dong. An 8% invoice line proves the scale."""
+    lines = normalize_purchase_lines(
+        "doc-1",
+        [{"mahang": "NL.TS86", "giaTriMua": "157533480", "thueGTGT": "12602678"}],
+    )
+    assert lines[0]["vat_amount"] == Decimal("12602678")
+    ratio = lines[0]["vat_amount"] / lines[0]["purchase_amount"]
+    assert ratio.quantize(Decimal("0.0001")) == Decimal("0.0800")
+
+
+def test_a_real_purchase_vat_amount_fits_the_column(session):
+    """The column was NUMERIC(8,4).
+
+    SQLite stores anything regardless of the declared precision, so this only
+    ever failed once a real invoice reached PostgreSQL, which refused it with
+    "numeric field overflow". Run the suite against Postgres to exercise it.
+    """
+    document = PurchaseDocument(source_id="purchase-1", normalized_hash="hash")
+    session.add(document)
+    session.flush()
+    session.add(
+        PurchaseLine(
+            purchase_document_id=document.id,
+            source_line_key="line-1",
+            vat_amount=Decimal("12602678.00"),
+        )
+    )
+    session.commit()
+
+    stored = session.query(PurchaseLine).one()
+    assert stored.vat_amount == Decimal("12602678.00")

@@ -11,7 +11,12 @@ class Base(DeclarativeBase):
 
 
 def _engine_options(url: str) -> dict:
-    return {"connect_args": {"check_same_thread": False}} if url.startswith("sqlite") else {}
+    if url.startswith("sqlite"):
+        return {"connect_args": {"check_same_thread": False}}
+    # A pooled connection can be closed by the server or a network device while
+    # it sits idle. Without pre-ping the next request gets the dead one and
+    # fails for a reason that has nothing to do with the request.
+    return {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 5}
 
 
 settings = get_settings()

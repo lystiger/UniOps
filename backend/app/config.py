@@ -13,6 +13,21 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     log_level: str = "INFO"
 
+    # Session authentication. The cookie is HttpOnly and SameSite=Lax, so a
+    # cross-site form cannot carry it into a state-changing request.
+    session_cookie_name: str = "uniops_session"
+    # Must be true wherever UniOps is reached over HTTPS. It is false by default
+    # because the supported deployment is plain HTTP on a trusted internal
+    # network, and a Secure cookie is simply never sent there, which would lock
+    # everyone out rather than fail loudly.
+    session_cookie_secure: bool = False
+    session_lifetime_hours: int = 12
+    # Serve the built frontend from this process so the internal deployment is a
+    # single door. The static bundle itself carries no data and stays readable
+    # without a session; every API route behind it does not.
+    serve_frontend: bool = False
+    frontend_dist_path: str = "frontend/dist"
+
     easybooks_live_enabled: bool = False
     easybooks_base_url: str = "https://app133.easybooks.vn"
     easybooks_company_id: str | None = None
@@ -32,6 +47,13 @@ class Settings(BaseSettings):
     easybooks_request_timeout_seconds: float = 20.0
     easybooks_max_retries: int = 3
     easybooks_sync_overlap_days: int = 7
+
+    @field_validator("session_lifetime_hours")
+    @classmethod
+    def _positive_lifetime(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("UNIOPS_SESSION_LIFETIME_HOURS must be at least 1")
+        return value
 
     @field_validator(
         "easybooks_company_id",

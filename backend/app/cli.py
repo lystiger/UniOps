@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import sys
 from datetime import date, timedelta
@@ -14,6 +15,8 @@ from app.integrations.easybooks.client import (
     HttpxReadOnlyTransport,
 )
 from app.integrations.easybooks.sync import FixtureBundle, fetch_live_bundle, sync_bundle
+from app.services import auth
+from app.services.db_transfer import TransferRefused, transfer
 from app.services.export import export_workbook
 
 
@@ -36,6 +39,90 @@ def _export(args: argparse.Namespace) -> None:
             }
         )
     )
+
+
+def _read_password(prompt: str, from_stdin: bool) -> str:
+    """Take a password from a pipe or a terminal, never from the command line.
+
+    An argument would land in the shell history and in the process list, where
+    anyone on the machine can read it.
+    """
+    if from_stdin:
+        return sys.stdin.readline().rstrip("\n")
+    first = getpass.getpass(prompt)
+    if first != getpass.getpass("Repeat password: "):
+        raise SystemExit("the two passwords do not match")
+    return first
+
+
+def _user(args: argparse.Namespace) -> None:
+    with SessionLocal() as session:
+        try:
+            if args.user_command == "list":
+                for user in auth.list_users(session):
+                    state = "active" if user.is_active else "disabled"
+                    last = user.last_login_at.isoformat() if user.last_login_at else "never"
+                    print(f"{user.username}\t{user.role.value}\t{state}\tlast login {last}")
+                return
+            if args.user_command == "create":
+                password = _read_password("New password: ", args.password_stdin)
+                user = auth.create_user(
+                    session,
+                    username=args.username,
+                    password=password,
+                    role=auth.ROLE_BY_CLI_NAME[args.role],
+                    full_name=args.full_name,
+                )
+                print(f"created {user.username} with role {user.role.value}")
+                return
+            if args.user_command == "passwd":
+                password = _read_password("New password: ", args.password_stdin)
+                user = auth.set_password(session, args.username, password)
+                print(f"password changed for {user.username}; every session was signed out")
+                return
+            user = auth.set_active(session, args.username, args.user_command == "enable")
+            print(f"{user.username} is now {'active' if user.is_active else 'disabled'}")
+        except (auth.UserExists, auth.UserNotFound, auth.WeakPassword) as exc:
+            raise SystemExit(str(exc)) from exc
+
+
+def _purge_sessions(_: argparse.Namespace) -> None:
+    with SessionLocal() as session:
+        removed = auth.purge_expired_sessions(session)
+    print(json.dumps({"sessions_removed": removed}))
+
+
+def _migrate_db(args: argparse.Namespace) -> None:
+    try:
+        summary = transfer(args.source, args.target, batch_size=args.batch_size)
+    except TransferRefused as exc:
+        print(f"transfer refused: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    print(json.dumps({"tables": summary.rows_by_table, "total_rows": summary.total_rows}))
+
+
+def _add_user_parsers(subparsers: argparse._SubParsersAction) -> None:
+    user = subparsers.add_parser("user", help="manage UniOps accounts")
+    commands = user.add_subparsers(dest="user_command", required=True)
+    commands.add_parser("list", help="list accounts, roles, and last sign-in")
+
+    create = commands.add_parser("create", help="create an account")
+    create.add_argument("--username", required=True)
+    create.add_argument("--role", required=True, choices=sorted(auth.ROLE_BY_CLI_NAME))
+    create.add_argument("--full-name")
+    create.add_argument(
+        "--password-stdin", action="store_true", help="read the password from stdin"
+    )
+
+    passwd = commands.add_parser("passwd", help="set a new password and sign the account out")
+    passwd.add_argument("--username", required=True)
+    passwd.add_argument(
+        "--password-stdin", action="store_true", help="read the password from stdin"
+    )
+
+    for name, help_text in [("disable", "disable"), ("enable", "re-enable")]:
+        parser = commands.add_parser(name, help=f"{help_text} an account")
+        parser.add_argument("--username", required=True)
 
 
 def main() -> None:
@@ -62,7 +149,26 @@ def main() -> None:
     export.add_argument("--from-date", type=_date)
     export.add_argument("--to-date", type=_date)
 
+    _add_user_parsers(subparsers)
+    subparsers.add_parser("purge-sessions", help="delete expired and revoked sign-in sessions")
+
+    migrate = subparsers.add_parser(
+        "migrate-db", help="copy a whole UniOps database into an empty migrated one"
+    )
+    migrate.add_argument("--source", required=True, help="SQLAlchemy URL to read")
+    migrate.add_argument("--target", required=True, help="SQLAlchemy URL to fill")
+    migrate.add_argument("--batch-size", type=int, default=1000)
+
     args = parser.parse_args()
+    if args.command == "user":
+        _user(args)
+        return
+    if args.command == "purge-sessions":
+        _purge_sessions(args)
+        return
+    if args.command == "migrate-db":
+        _migrate_db(args)
+        return
     # EasyBooks answers an inverted window with an empty result rather than an
     # error, which reads as "no documents" instead of "bad request".
     if args.from_date and args.to_date and args.from_date > args.to_date:

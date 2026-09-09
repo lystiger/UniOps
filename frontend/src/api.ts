@@ -1,19 +1,51 @@
-import type { Customer, NewOrderLine, Order, OrderList, OrderStatus, Product } from "./types";
+import type {
+  Customer,
+  NewOrderLine,
+  Order,
+  OrderList,
+  OrderStatus,
+  Product,
+  User,
+} from "./types";
+
+/** The session is missing or expired. The app answers this by showing sign-in. */
+export class UnauthorizedError extends Error {}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
+    // The session lives in an HttpOnly cookie, so it has to be sent explicitly
+    // for anything other than a plain same-origin default.
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: "Request failed" }));
     const detail = typeof body.detail === "string" ? body.detail : "Check the entered values";
-    throw new Error(detail);
+    // A 401 on sign-in means the credentials were wrong and the reason belongs
+    // on screen; a 401 anywhere else means the session ended. Both carry the
+    // server's wording, and only the type tells the app which happened.
+    throw response.status === 401 ? new UnauthorizedError(detail) : new Error(detail);
+  }
+  if (response.status === 204) {
+    return undefined as T;
   }
   return response.json() as Promise<T>;
 }
 
 export const api = {
+  me: () => request<User>("/api/auth/me"),
+  login: (username: string, password: string) =>
+    request<User>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    }),
+  logout: () => request<void>("/api/auth/logout", { method: "POST" }),
+  changePassword: (current_password: string, new_password: string) =>
+    request<User>("/api/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password, new_password }),
+    }),
   customers: () => request<Customer[]>("/api/customers"),
   createCustomer: (payload: { name: string; tax_code?: string }) =>
     request<Customer>("/api/customers", {
@@ -52,4 +84,3 @@ export const api = {
       body: JSON.stringify({ status }),
     }),
 };
-

@@ -9,8 +9,14 @@ from app.config import Settings
 from app.database import Base, get_db
 from app.integrations.easybooks.sync import FixtureBundle
 from app.main import app
+from app.models import UserRole
+from app.services import auth
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+# Read before the autouse fixture below strips UNIOPS_* from the environment.
+# Point it at a PostgreSQL URL to run the same suite against the deploy target.
+TEST_DATABASE_URL = os.environ.get("UNIOPS_TEST_DATABASE_URL")
 
 
 @pytest.fixture(autouse=True)
@@ -27,13 +33,20 @@ def isolate_settings_from_local_env(monkeypatch):
 
 
 class ApiClient:
+    """A caller that keeps its cookies, so a signed-in session survives calls."""
+
+    def __init__(self):
+        self.cookies = httpx.Cookies()
+
     def request(self, method, path, **kwargs):
         async def send():
             transport = httpx.ASGITransport(app=app)
             async with httpx.AsyncClient(
-                transport=transport, base_url="http://testserver"
+                transport=transport, base_url="http://testserver", cookies=self.cookies
             ) as client:
-                return await client.request(method, path, **kwargs)
+                response = await client.request(method, path, **kwargs)
+                self.cookies.extract_cookies(response)
+                return response
 
         return asyncio.run(send())
 
@@ -52,9 +65,15 @@ class ApiClient:
 
 @pytest.fixture
 def session(tmp_path):
-    engine = create_engine(
-        f"sqlite:///{tmp_path / 'test.db'}", connect_args={"check_same_thread": False}
-    )
+    if TEST_DATABASE_URL:
+        engine = create_engine(TEST_DATABASE_URL)
+        # One shared database across a sequential run, so each test starts from
+        # the same clean schema the SQLite temporary file gives for free.
+        Base.metadata.drop_all(engine)
+    else:
+        engine = create_engine(
+            f"sqlite:///{tmp_path / 'test.db'}", connect_args={"check_same_thread": False}
+        )
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     with factory() as value:
@@ -63,8 +82,30 @@ def session(tmp_path):
     engine.dispose()
 
 
+# Long enough to satisfy the real password rule, so the tests exercise it.
+ACCOUNT_PASSWORDS = {
+    "admin": "admin-password-01",
+    "office": "office-password-01",
+    "factory": "factory-password-01",
+}
+
+
 @pytest.fixture
-def client(session):
+def accounts(session):
+    """One account per role, so route guards are tested against all three."""
+    for username, role in [
+        ("admin", UserRole.ADMIN),
+        ("office", UserRole.OFFICE),
+        ("factory", UserRole.FACTORY_READ),
+    ]:
+        auth.create_user(
+            session, username=username, password=ACCOUNT_PASSWORDS[username], role=role
+        )
+    return ACCOUNT_PASSWORDS
+
+
+@pytest.fixture
+def client_factory(session, accounts):
     factory = sessionmaker(bind=session.get_bind(), expire_on_commit=False)
 
     async def override_db():
@@ -72,8 +113,40 @@ def client(session):
             yield request_session
 
     app.dependency_overrides[get_db] = override_db
-    yield ApiClient()
+
+    def build(username: str | None = None) -> ApiClient:
+        caller = ApiClient()
+        if username is not None:
+            response = caller.post(
+                "/api/auth/login",
+                json={"username": username, "password": accounts[username]},
+            )
+            assert response.status_code == 200, response.text
+        return caller
+
+    yield build
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client(client_factory):
+    """Signed in as admin. Most tests are about the route, not about the guard."""
+    return client_factory("admin")
+
+
+@pytest.fixture
+def office_client(client_factory):
+    return client_factory("office")
+
+
+@pytest.fixture
+def factory_client(client_factory):
+    return client_factory("factory")
+
+
+@pytest.fixture
+def anonymous_client(client_factory):
+    return client_factory()
 
 
 @pytest.fixture

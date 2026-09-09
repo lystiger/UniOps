@@ -1,6 +1,8 @@
 import { type FormEvent, useEffect, useState } from "react";
-import { api } from "../api";
+import { api, UnauthorizedError } from "../api";
 import type { Customer, NewOrderLine, Product } from "../types";
+
+const ignoreSessionLoss = () => undefined;
 
 const emptyLine = (): NewOrderLine => ({
   product_id: "",
@@ -17,7 +19,13 @@ function localDate(offsetDays = 0) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 
-export function NewOrder({ onCreated }: { onCreated: () => void }) {
+export function NewOrder({
+  onCreated,
+  onSessionLost = ignoreSessionLoss,
+}: {
+  onCreated: () => void;
+  onSessionLost?: () => void;
+}) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [customerId, setCustomerId] = useState("");
@@ -34,6 +42,10 @@ export function NewOrder({ onCreated }: { onCreated: () => void }) {
       setCustomers(customerItems);
       setProducts(productItems);
     } catch (reason) {
+      if (reason instanceof UnauthorizedError) {
+        onSessionLost();
+        return;
+      }
       setError(reason instanceof Error ? reason.message : "Could not load the catalog");
     }
   }
@@ -73,6 +85,10 @@ export function NewOrder({ onCreated }: { onCreated: () => void }) {
       });
       onCreated();
     } catch (reason) {
+      if (reason instanceof UnauthorizedError) {
+        onSessionLost();
+        return;
+      }
       setError(reason instanceof Error ? reason.message : "Order was not saved");
     } finally {
       setSaving(false);

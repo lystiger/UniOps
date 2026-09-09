@@ -1,0 +1,26 @@
+# The supported v0.1.1 deployment database. The application itself is run with
+# uvicorn next to it, not in this file, so an operator can restart either one
+# without touching the other.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: uniops
+      POSTGRES_USER: uniops
+      # Set UNIOPS_DB_PASSWORD in the shell or in a .env beside this file.
+      POSTGRES_PASSWORD: ${UNIOPS_DB_PASSWORD:?set UNIOPS_DB_PASSWORD before starting}
+    # Bound to loopback: the database is reached by the application on this
+    # host, never from the wider network.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - uniops-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uniops -d uniops"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  uniops-db:

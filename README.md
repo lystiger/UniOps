@@ -1,20 +1,25 @@
-# UniOps v0.1
+# UniOps v0.1.1
 
 UniOps is the lightweight operational system of record for UniGreen's make-to-order paper converting workflow. It captures customer orders before accounting, shows their movement through production and delivery, and preserves read-only EasyBooks source data for audit and normalization.
 
-EasyBooks remains the accounting system of record. UniOps v0.1 never creates, changes, or deletes EasyBooks data.
+EasyBooks remains the accounting system of record. UniOps never creates, changes, or deletes EasyBooks data.
 
 ## Scope
 
-Included in v0.1:
+Included in v0.1.1:
 
+- session authentication with three roles (`admin`, `office`, `factory-read`)
+  guarding every API route;
+- PostgreSQL as the deployment target, with a verified copy from the v0.1
+  SQLite file;
 - canonical customers and products linked by stable EasyBooks codes or IDs;
 - operational orders and order lines with a small forward-only lifecycle;
 - New Order intake and an internal Order Board;
 - read-only, live-opt-in EasyBooks transport;
 - sanitized fixture ingestion for sales headers, sales lines, and purchase report rows;
 - immutable raw payload versions, normalized accounting tables, sync metrics, and reconciliation warnings;
-- SQLite migration, backend/API tests, and frontend tests/lint/typecheck/build.
+- Alembic migrations exercised on both SQLite and PostgreSQL, backend/API
+  tests, and frontend tests/lint/typecheck/build.
 
 Not included: production scheduling optimization, warehouse management, truck routing, EasyBooks write-back, AI decision-making, complex permissions, receivables workflows, or a generic ERP.
 
@@ -40,9 +45,11 @@ The repository is a small monorepo:
 - `backend/migrations`: Alembic schema history;
 - `backend/tests`: sanitized fixtures and backend/integration/API tests;
 - `frontend/src`: React/TypeScript intake and board UI;
+- `scripts/`: backup and restore;
+- `docs/operations.md`: accounts, PostgreSQL deployment, and backups;
 - `docs/easybooks-integration.md`: source-specific contract and live setup boundary.
 
-SQLite is the selected v0.1 database so a small team can run the system without infrastructure. SQLAlchemy keeps persistence isolated, but another database is not a tested v0.1 promise. API handlers are async entry points around short synchronous database operations; this is intentionally simple for current load and should be revisited before high concurrency.
+PostgreSQL is the v0.1.1 deployment target. SQLite remains the default for local development and for the test suite, and the same suite runs against PostgreSQL with `make test-pg`, so portability is a checked claim rather than an assumption. API handlers are async entry points around short synchronous database operations; this is intentionally simple for current load and should be revisited before high concurrency.
 
 ## Local development
 
@@ -76,13 +83,27 @@ cd frontend
 npm run dev
 ```
 
-Open `http://localhost:5173`. The Vite development server proxies `/api` to `http://127.0.0.1:8000`. API documentation is available at `http://127.0.0.1:8000/docs`.
+Create an account before the first sign-in, because there is no default one:
+
+```bash
+uv run uniops user create --username you --role admin
+```
+
+Open `http://localhost:5173`. The Vite development server proxies `/api` to `http://127.0.0.1:8000`, so the session cookie is same-origin in development too. API documentation is available at `http://127.0.0.1:8000/docs`.
 
 ## Database and configuration
 
 Copy `.env.example` to `.env` and change only values needed locally. `.env` is ignored by Git.
 
-The default database is `sqlite:///./uniops.db`. Build it or bring it to the current schema with:
+The default database is `sqlite:///./uniops.db`, which is the development and test default. The deployment target is PostgreSQL:
+
+```bash
+UNIOPS_DATABASE_URL=postgresql+psycopg://uniops:PASSWORD@127.0.0.1:5432/uniops
+```
+
+`docker compose up -d db` starts one bound to loopback. Moving an existing SQLite database across, backups, and accounts are all in [Operations](docs/operations.md).
+
+Build the schema or bring it to the current revision with:
 
 ```bash
 uv run alembic upgrade head
@@ -154,6 +175,15 @@ Core endpoints:
 - `PATCH/DELETE /api/orders/{order_id}/lines/{line_id}`
 - `GET /api/sync-runs` (read-only EasyBooks ingestion history and metrics)
 
+Authentication:
+
+- `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`
+- `POST /api/auth/change-password`
+- `GET /api/users` (admin only)
+- `GET /api/health` is the only unauthenticated route, so a monitor can reach it
+
+Every other route requires a session. `GET` needs any signed-in account; anything that changes data needs `admin` or `office`; `factory-read` is refused with 403.
+
 Orders begin as `DRAFT` (shown as Waiting). The lifecycle is:
 
 `DRAFT → CONFIRMED → SCHEDULED → IN_PRODUCTION → READY → DELIVERY_PENDING → DELIVERED → INVOICED → CLOSED`
@@ -171,6 +201,13 @@ npm run lint
 npm run build
 ```
 
+Run the backend suite against the deployment database as well. It catches what SQLite hides, such as a numeric column too narrow for the values it holds:
+
+```bash
+docker compose up -d db
+make test-pg
+```
+
 ## Known limitations
 
 - EasyBooks live reads need an operator-provided bearer token plus the account's `group`; no credentials are stored in the repository.
@@ -178,21 +215,47 @@ npm run build
 - The sales list, count, and detail contracts and the purchase report body all come from direct observation of the company account and have been verified live. The sales dynamic report was exercised and deliberately removed as redundant and unsafe to call.
 - EasyBooks returns an empty result rather than an error for several misconfigurations - a missing `group`, an inverted date window, an empty `listMaterialGoods`. Where UniOps can detect these it refuses instead of reporting zero rows.
 - Live ingestion is verified across full years 2024-2026 and a year boundary, with counts reconciling exactly. Only sales and purchases are ingested; no other EasyBooks entity is read.
-- SQLite and synchronous database operations target the present small-team load, not high concurrency.
+- Synchronous database operations target the present small-team load, not high concurrency.
+- **Sign-in has no rate limit or lockout.** Argon2id makes each attempt cost real time and an unknown username costs the same as a known one, but a determined attacker with network access can keep guessing. This is sized for three accounts on an internal network.
+- **There is no audit trail.** The database records who exists and when they last signed in, not who created or advanced which order.
+- The static frontend bundle loads without a session, because the sign-in screen is part of it. It carries no data; every route it calls is guarded.
 - No production scheduling, inventory, delivery optimization, invoicing, receivable, or payment workflow is implemented yet.
 
-## Accepted risk: no application authentication
+## Authentication and roles
 
-UniOps v0.1 has **no application authentication, no user accounts, and no role model**. Every API route and every UI screen is reachable by anyone who can reach the process. This is a deliberate v0.1 decision, not an oversight, and it carries conditions:
+v0.1 shipped with the accepted risk that every route was reachable by anyone who could reach the process. v0.1.1 closes it. Signing in is required for all data, and three roles divide what a signed-in account may do:
 
-- deploy only on a trusted internal network, never on a public address;
-- do not expose the API through a public reverse proxy, tunnel, or port forward;
+| Role | May do |
+| --- | --- |
+| `admin` | everything, plus read the account list |
+| `office` | read and write orders and catalog |
+| `factory-read` | read only: the board, catalog, and sync history |
+
+There is no default account and no self-registration. Create the first one from the shell:
+
+```bash
+uv run uniops user create --username you --role admin
+```
+
+Passwords are Argon2id hashes, at least 12 characters, and are never passed as command-line arguments. The session is an `HttpOnly`, `SameSite=Lax` cookie holding a random token whose SHA-256 is what the database stores, so a copy of the database cannot be replayed as a live session. Changing or disabling an account signs it out everywhere.
+
+`SameSite=Lax` is what stands in for a CSRF token: a cross-site form cannot carry the cookie into a state-changing request.
+
+[Operations](docs/operations.md) covers accounts, sessions, the PostgreSQL deployment, and backups in full.
+
+## Deployment conditions
+
+These still hold, and authentication does not replace them:
+
+- deploy on a trusted internal network, not on a public address;
+- if UniOps is ever put behind TLS, set `UNIOPS_SESSION_COOKIE_SECURE=true` at the same time — and not before, since a `Secure` cookie is never sent over plain HTTP;
 - treat the database as containing real customer, supplier, and financial data, because after a live sync it does;
-- exported workbooks carry the same data. They are gitignored, but nothing stops them being copied elsewhere.
-
-Anyone who reaches the process can read every customer, price, invoice, and purchase, and can create or alter orders. Adding authentication is the first thing to do before UniOps is reachable by anyone outside the team.
+- exported workbooks carry the same data. They are gitignored, but nothing stops them being copied elsewhere;
+- take backups and restore one occasionally. `scripts/backup.sh` writes and verifies them; the restore drill is in [Operations](docs/operations.md).
 
 ## Recommended v0.2
 
-Build a narrow production-demand milestone: approve/confirm order intake, introduce production batches and planned operating windows constrained to 07:00–18:00, show capacity conflicts, and capture actual production completion. Keep delivery planning and EasyBooks write-back out until that workflow is observed and validated.
+Link the operational order to the accounting document it becomes: map receivables and payments onto the already-ingested sales data, and connect a UniOps order to the EasyBooks invoice that settles it. That turns the order board into something that can answer "what is unpaid" without leaving UniOps, and it needs no EasyBooks write-back.
+
+Production scheduling — batches, operating windows constrained to 07:00–18:00, capacity conflicts, actual completion — remains the natural milestone after that.
 

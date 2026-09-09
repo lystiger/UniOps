@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models import OrderStatus
+from app.models import OrderStatus, UserRole
 
 
 class ApiModel(BaseModel):
@@ -135,3 +135,23 @@ class SyncRunRead(ApiModel):
     documents_failed: int
     reconciliation_warnings: int
     error_summary: str | None
+
+
+class LoginRequest(ApiModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=256)
+
+
+class PasswordChange(ApiModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)
+
+
+class UserRead(ApiModel):
+    id: str
+    username: str
+    full_name: str | None
+    role: UserRole
+    is_active: bool
+    last_login_at: datetime | None
+    created_at: datetime

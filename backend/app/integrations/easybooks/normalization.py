@@ -276,7 +276,7 @@ def normalize_purchase_lines(
                 "unit_price": source_decimal(source.get("donGia")),
                 "purchase_amount": source_decimal(source.get("giaTriMua")),
                 "discount_amount": source_decimal(source.get("chietKhau")),
-                "vat_rate": (
+                "vat_amount": (
                     source_decimal(source.get("thueGTGT"))
                     if source.get("thueGTGT") not in (None, "")
                     else None

@@ -202,7 +202,7 @@ def _purchase_lines(session: Session, from_date: date | None, to_date: date | No
             line.unit_price,
             line.purchase_amount,
             line.discount_amount,
-            line.vat_rate,
+            line.vat_amount,
             line.warehouse_code,
             line.description,
         ]
@@ -221,7 +221,7 @@ def _purchase_lines(session: Session, from_date: date | None, to_date: date | No
             "Unit price",
             "Purchase amount",
             "Discount",
-            "VAT rate",
+            "VAT amount",
             "Warehouse",
             "Description",
         ],
@@ -287,7 +287,7 @@ def _write_sheet(workbook: Workbook, spec: SheetSpec, *, first: bool) -> None:
 
 
 def _is_quantity(header: str) -> bool:
-    return header in {"Quantity", "Currency rate", "VAT rate"}
+    return header in {"Quantity", "Currency rate"}
 
 
 def build_workbook(

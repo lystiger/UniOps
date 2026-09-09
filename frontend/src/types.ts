@@ -1,3 +1,21 @@
+export type Role = "ADMIN" | "OFFICE" | "FACTORY_READ";
+
+export interface User {
+  id: string;
+  username: string;
+  full_name: string | null;
+  role: Role;
+  is_active: boolean;
+  last_login_at: string | null;
+}
+
+/** Roles that may create or change anything. FACTORY_READ may only look. */
+export const WRITE_ROLES: Role[] = ["ADMIN", "OFFICE"];
+
+export function canWrite(role: Role): boolean {
+  return WRITE_ROLES.includes(role);
+}
+
 export type OrderStatus =
   | "DRAFT"
   | "CONFIRMED"

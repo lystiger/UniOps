@@ -3,6 +3,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import read_access, write_access
 from app.database import get_db
 from app.models import OrderStatus
 from app.schemas import (
@@ -25,7 +26,7 @@ def _translate_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc))
 
 
-@router.get("", response_model=OrderList)
+@router.get("", response_model=OrderList, dependencies=[read_access])
 async def list_orders(
     order_status: OrderStatus | None = Query(default=None, alias="status"),
     search: str | None = Query(default=None, max_length=100),
@@ -47,7 +48,10 @@ async def list_orders(
     return OrderList(items=items, total=total)
 
 
-@router.post("", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=OrderRead, status_code=status.HTTP_201_CREATED,
+    dependencies=[write_access],
+)
 async def create_order(data: OrderCreate, session: Session = Depends(get_db)):
     try:
         return orders.create_order(session, data)
@@ -55,7 +59,7 @@ async def create_order(data: OrderCreate, session: Session = Depends(get_db)):
         raise _translate_error(exc) from exc
 
 
-@router.get("/{order_id}", response_model=OrderRead)
+@router.get("/{order_id}", response_model=OrderRead, dependencies=[read_access])
 async def get_order(order_id: str, session: Session = Depends(get_db)):
     try:
         return orders.get_order(session, order_id)
@@ -63,7 +67,7 @@ async def get_order(order_id: str, session: Session = Depends(get_db)):
         raise _translate_error(exc) from exc
 
 
-@router.patch("/{order_id}", response_model=OrderRead)
+@router.patch("/{order_id}", response_model=OrderRead, dependencies=[write_access])
 async def update_order(order_id: str, data: OrderUpdate, session: Session = Depends(get_db)):
     try:
         return orders.update_order(session, order_id, data)
@@ -71,7 +75,7 @@ async def update_order(order_id: str, data: OrderUpdate, session: Session = Depe
         raise _translate_error(exc) from exc
 
 
-@router.post("/{order_id}/status", response_model=OrderRead)
+@router.post("/{order_id}/status", response_model=OrderRead, dependencies=[write_access])
 async def change_status(
     order_id: str, data: OrderStatusChange, session: Session = Depends(get_db)
 ):
@@ -81,7 +85,10 @@ async def change_status(
         raise _translate_error(exc) from exc
 
 
-@router.post("/{order_id}/lines", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{order_id}/lines", response_model=OrderRead, status_code=status.HTTP_201_CREATED,
+    dependencies=[write_access],
+)
 async def add_line(order_id: str, data: OrderLineCreate, session: Session = Depends(get_db)):
     try:
         return orders.add_line(session, order_id, data)
@@ -89,7 +96,9 @@ async def add_line(order_id: str, data: OrderLineCreate, session: Session = Depe
         raise _translate_error(exc) from exc
 
 
-@router.patch("/{order_id}/lines/{line_id}", response_model=OrderRead)
+@router.patch(
+    "/{order_id}/lines/{line_id}", response_model=OrderRead, dependencies=[write_access]
+)
 async def update_line(
     order_id: str,
     line_id: str,
@@ -102,7 +111,9 @@ async def update_line(
         raise _translate_error(exc) from exc
 
 
-@router.delete("/{order_id}/lines/{line_id}", response_model=OrderRead)
+@router.delete(
+    "/{order_id}/lines/{line_id}", response_model=OrderRead, dependencies=[write_access]
+)
 async def remove_line(order_id: str, line_id: str, session: Session = Depends(get_db)):
     try:
         return orders.remove_line(session, order_id, line_id)

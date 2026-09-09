@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "../api";
+import { api, UnauthorizedError } from "../api";
 import type { Order, OrderStatus } from "../types";
 import { StatusBadge } from "./StatusBadge";
 
@@ -48,6 +48,10 @@ function isOverdue(order: Order) {
   return order.required_date < localToday && !["DELIVERED", "INVOICED", "CLOSED", "CANCELLED"].includes(order.status);
 }
 
+// A stable identity. An inline default would be a new function on every render,
+// which would change `load` every render and refetch the board without end.
+const ignoreSessionLoss = () => undefined;
+
 function lineSummary(order: Order) {
   const first = order.lines[0];
   if (!first) return "No lines";
@@ -55,7 +59,18 @@ function lineSummary(order: Order) {
   return order.lines.length > 1 ? `${summary} +${order.lines.length - 1}` : summary;
 }
 
-export function OrderBoard({ refreshKey, onNewOrder }: { refreshKey: number; onNewOrder: () => void }) {
+export function OrderBoard({
+  refreshKey,
+  onNewOrder,
+  canWrite = true,
+  onSessionLost = ignoreSessionLoss,
+}: {
+  refreshKey: number;
+  onNewOrder: () => void;
+  /** FACTORY_READ sees the board without any control that would change it. */
+  canWrite?: boolean;
+  onSessionLost?: () => void;
+}) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -69,11 +84,15 @@ export function OrderBoard({ refreshKey, onNewOrder }: { refreshKey: number; onN
       const response = await api.orders(search);
       setOrders(response.items.filter((order) => order.status !== "CANCELLED"));
     } catch (reason) {
+      if (reason instanceof UnauthorizedError) {
+        onSessionLost();
+        return;
+      }
       setError(reason instanceof Error ? reason.message : "Could not load orders");
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, onSessionLost]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, search ? 250 : 0);
@@ -91,6 +110,10 @@ export function OrderBoard({ refreshKey, onNewOrder }: { refreshKey: number; onN
       const updated = await api.changeStatus(order.id, target);
       setOrders((items) => items.map((item) => (item.id === updated.id ? updated : item)));
     } catch (reason) {
+      if (reason instanceof UnauthorizedError) {
+        onSessionLost();
+        return;
+      }
       setError(reason instanceof Error ? reason.message : "Status was not changed");
     } finally {
       setMovingId("");
@@ -114,7 +137,9 @@ export function OrderBoard({ refreshKey, onNewOrder }: { refreshKey: number; onN
               placeholder="Order or customer"
             />
           </label>
-          <button className="primary-button" onClick={onNewOrder}>+ New order</button>
+          {canWrite && (
+            <button className="primary-button" onClick={onNewOrder}>+ New order</button>
+          )}
         </div>
       </div>
 
@@ -146,7 +171,7 @@ export function OrderBoard({ refreshKey, onNewOrder }: { refreshKey: number; onN
                         <span>{isOverdue(order) ? "Overdue" : "Required"}</span>
                         <strong>{formatDue(order.required_date)}</strong>
                       </div>
-                      {nextStatus[order.status] && (
+                      {canWrite && nextStatus[order.status] && (
                         <button
                           className="advance-button"
                           disabled={movingId === order.id}
