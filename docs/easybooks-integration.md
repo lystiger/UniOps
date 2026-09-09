@@ -264,9 +264,13 @@ And no payment or settlement state can be derived at all — `typeName` describe
 what the document *was* when created, not whether it has since been paid, so
 reading it as "unpaid" would report every settled invoice as outstanding.
 
-No payments or receipts endpoint has been observed. None has been added, because
-guessing one would break the boundary this integration is built on. See
-[Order to cash](order-to-cash.md).
+Payment and receivable endpoints **have since been observed** and are documented
+in [EasyBooks receivables discovery](easybooks-receivables-discovery.md): customer
+debt, invoice-level open items, cash receipts, and bank deposits. None is
+implemented in the connector yet. The finding that governs any future work is
+that this company records money-in but never offsets it against invoices, so the
+amount collected is zero against every customer and no invoice-level settlement
+can be derived. See also [Order to cash](order-to-cash.md).
 
 ## Fixture contract
 
