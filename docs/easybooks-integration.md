@@ -15,12 +15,11 @@ Base URL: `https://app133.easybooks.vn`
 | Sales list | GET | `/v2/api/sa-invoice-objects-filter` | Returns the complete matching array; no server pagination |
 | Sales count | GET | `/v2/api/sa-invoice-count` | Bare non-negative JSON integer |
 | Sales detail | GET | `/v2/api/sa-invoice-details/by-saInvoiceID` | `sAInvoiceID=<sales document UUID>` |
-| Sales report | POST | `/api/dynamic-report/ban-hang` | `typeReport=SO_CHI_TIET_BAN_HANG` |
 | Purchase report | POST | `/api/dynamic-report/mua-hang` | Full observed body; rows under `data` |
 
 All five are connector constants. None of them is operator-configurable, so there is no route for an operator to point UniOps at an unobserved endpoint.
 
-The HTTP transport rejects methods other than GET and POST. POST is allowed only for the two report routes. Timeouts and exponential retry/backoff apply to network failures, 408, 429, and 5xx responses. Authentication headers are never logged.
+The HTTP transport rejects methods other than GET and POST. POST is allowed only for the purchase report route. Timeouts and exponential retry/backoff apply to network failures, 408, 429, and 5xx responses. Authentication headers are never logged.
 
 ### Request scoping
 
@@ -131,6 +130,16 @@ The response is an envelope; the rows sit under `data`. Each row carries `totalR
 The observed request carried `fromDateSecond` and `toDateSecond` both set to the **current date** while the report range was `2026-05-01..2026-09-08`. They are therefore demonstrably not the report range, and their actual meaning has not been observed.
 
 They are reproduced because the real UI sends them, their construction is isolated in `EasyBooksClient._secondary_report_dates`, and no business logic reads them. The value is the current EasyBooks business date in `Asia/Ho_Chi_Minh`: using UTC would roll over seven hours early and send the wrong day. The clock is injected through the client's `today` argument so tests freeze it instead of depending on the wall clock.
+
+#### The sales dynamic report is deliberately absent
+
+`/api/dynamic-report/ban-hang` was exercised against the live account and then removed rather than implemented.
+
+It requires an explicit `listMaterialGoods` naming every material good to include. An empty list is not "all": it returns seven empty scaffolding rows carrying `isEmptyData` under HTTP 200, so a wrong list yields a silently incomplete report rather than an error. Supplying a correct list would first require observing a material-goods endpoint that has never been seen.
+
+What it returns is also redundant. With a goods list assembled from already-ingested lines it produced 49 rows across 35 documents - the same 35 documents and the same 49 lines already read through `sa-invoice-objects-filter` and `sa-invoice-details`, whose `donGia`/`soLuong`/`thanhTien` values UniOps already stores as Decimals. The additional fields are presentation (`donGiaString`, `colorNegative`, `linkRef`), not new facts.
+
+Removing it also narrows the write-capable surface: exactly one POST route remains allowed.
 
 #### Pagination is not required
 

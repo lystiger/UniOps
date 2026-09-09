@@ -384,3 +384,15 @@ def test_an_auth_failure_never_leaks_the_response_body():
     message = str(caught.value)
     assert "springframework" not in message
     assert "Exception" not in message
+
+
+def test_only_the_purchase_report_may_be_posted_to():
+    """The sales dynamic report was removed, narrowing the write-capable surface."""
+    from app.integrations.easybooks import client as client_module
+
+    assert not hasattr(client_module, "SALES_REPORT_PATH")
+    assert not hasattr(EasyBooksClient, "sales_report")
+
+    transport = _live_transport()
+    with pytest.raises(EasyBooksConfigurationError, match="POST is not allowed"):
+        transport.request("POST", "/api/dynamic-report/ban-hang")

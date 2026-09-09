@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 SALES_LIST_PATH = "/v2/api/sa-invoice-objects-filter"
 SALES_COUNT_PATH = "/v2/api/sa-invoice-count"
 SALES_DETAIL_PATH = "/v2/api/sa-invoice-details/by-saInvoiceID"
-SALES_REPORT_PATH = "/api/dynamic-report/ban-hang"
 PURCHASE_REPORT_PATH = "/api/dynamic-report/mua-hang"
 
 # EasyBooks is operated from Vietnam, so "today" must be that calendar date. Using
@@ -109,7 +108,7 @@ class HttpxReadOnlyTransport:
         json_body: dict[str, Any] | None = None,
     ) -> Any:
         method = method.upper()
-        if method == "POST" and path not in {SALES_REPORT_PATH, PURCHASE_REPORT_PATH}:
+        if method == "POST" and path != PURCHASE_REPORT_PATH:
             raise EasyBooksConfigurationError(f"POST is not allowed for EasyBooks path {path}")
         if method not in {"GET", "POST"}:
             raise EasyBooksConfigurationError(f"{method} is not allowed for EasyBooks")
@@ -218,18 +217,6 @@ class EasyBooksClient:
                 "companyID": self._company_id(),
                 "fromDate": from_date.isoformat(),
                 "toDate": to_date.isoformat(),
-            },
-        )
-
-    def sales_report(self, from_date: date, to_date: date) -> Any:
-        return self.transport.request(
-            "POST",
-            SALES_REPORT_PATH,
-            json_body={
-                "companyID": self._company_id(),
-                "fromDate": from_date.isoformat(),
-                "toDate": to_date.isoformat(),
-                "typeReport": "SO_CHI_TIET_BAN_HANG",
             },
         )
 
