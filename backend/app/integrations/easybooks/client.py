@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date
+from collections.abc import Callable
+from datetime import date, datetime
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -16,6 +18,21 @@ SALES_COUNT_PATH = "/v2/api/sa-invoice-count"
 SALES_DETAIL_PATH = "/v2/api/sa-invoice-details/by-saInvoiceID"
 SALES_REPORT_PATH = "/api/dynamic-report/ban-hang"
 PURCHASE_REPORT_PATH = "/api/dynamic-report/mua-hang"
+
+# EasyBooks is operated from Vietnam, so "today" must be that calendar date. Using
+# UTC would roll over seven hours early and send the wrong business date.
+EASYBOOKS_TIMEZONE = ZoneInfo("Asia/Ho_Chi_Minh")
+
+PURCHASE_REPORT_TYPE = "SO_CHI_TIET_MUA_HANG"
+PURCHASE_REPORT_FILE_NAME = "SoNhatKiMuaHang.xlsx"
+PURCHASE_REPORT_TYPE_CONFIG = 11
+PURCHASE_REPORT_ITEMS_PER_PAGE = 30
+PURCHASE_REPORT_FIRST_PAGE = 1
+
+
+def business_today() -> date:
+    """The current EasyBooks business date, in the timezone the account runs in."""
+    return datetime.now(EASYBOOKS_TIMEZONE).date()
 
 
 class EasyBooksConfigurationError(RuntimeError):
@@ -93,9 +110,18 @@ class HttpxReadOnlyTransport:
 
 
 class EasyBooksClient:
-    def __init__(self, transport: Transport, settings: Settings):
+    def __init__(
+        self,
+        transport: Transport,
+        settings: Settings,
+        *,
+        today: Callable[[], date] = business_today,
+    ):
         self.transport = transport
         self.settings = settings
+        # Injected so the report body stays deterministic under test instead of
+        # depending on the wall clock.
+        self._today = today
 
     def _company_id(self) -> str:
         """Return the configured companyID, or the empty value EasyBooks accepts.
@@ -146,15 +172,61 @@ class EasyBooksClient:
             },
         )
 
-    def purchase_report(self, from_date: date, to_date: date) -> Any:
+    def _secondary_report_dates(self) -> dict[str, str]:
+        """Build the report's secondary date pair.
+
+        UNKNOWN SEMANTICS. The observed request carried fromDateSecond and
+        toDateSecond both set to the current date while the report range itself
+        was 2026-05-01..2026-09-08, so these are demonstrably *not* the report
+        range. They are reproduced because the real UI sends them; no business
+        logic depends on them and none should until their meaning is observed.
+        """
+        today = self._today().isoformat()
+        return {"fromDateSecond": today, "toDateSecond": today}
+
+    def purchase_report_body(
+        self, from_date: date, to_date: date, *, page: int = PURCHASE_REPORT_FIRST_PAGE
+    ) -> dict[str, Any]:
+        """Reproduce the observed mua-hang request body.
+
+        Only the date range, companyID, and page vary; every other value is the
+        constant the EasyBooks web application sends. The previous partial body
+        made the server raise a NullPointerException.
+        """
+        return {
+            "toDate": to_date.isoformat(),
+            "fromDate": from_date.isoformat(),
+            "companyID": self._company_id(),
+            "typeReport": PURCHASE_REPORT_TYPE,
+            "fileName": PURCHASE_REPORT_FILE_NAME,
+            "dependent": False,
+            "accountingObjects": [],
+            "listMaterialGoods": [],
+            "listRSProductionOrderID": [],
+            "employeeID": "",
+            "isCheckAll": True,
+            "checkALL": True,
+            "mCodeFilter": "",
+            "mNameFilter": "",
+            "acCodeFilter": "",
+            "acNameFilter": "",
+            "acAddressFilter": "",
+            "materialGoodsCategoryID": "",
+            "isOnlyGetData": False,
+            "isCustomForm": True,
+            "typeReportConfig": PURCHASE_REPORT_TYPE_CONFIG,
+            "itemsPerPage": PURCHASE_REPORT_ITEMS_PER_PAGE,
+            "page": page,
+            **self._secondary_report_dates(),
+        }
+
+    def purchase_report(
+        self, from_date: date, to_date: date, *, page: int = PURCHASE_REPORT_FIRST_PAGE
+    ) -> Any:
         return self.transport.request(
             "POST",
             PURCHASE_REPORT_PATH,
-            json_body={
-                "companyID": self._company_id(),
-                "fromDate": from_date.isoformat(),
-                "toDate": to_date.isoformat(),
-            },
+            json_body=self.purchase_report_body(from_date, to_date, page=page),
         )
 
     def sales_lines(self, document_id: str) -> Any:

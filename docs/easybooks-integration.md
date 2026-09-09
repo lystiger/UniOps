@@ -16,7 +16,7 @@ Base URL: `https://app133.easybooks.vn`
 | Sales count | GET | `/v2/api/sa-invoice-count` | Bare non-negative JSON integer |
 | Sales detail | GET | `/v2/api/sa-invoice-details/by-saInvoiceID` | `sAInvoiceID=<sales document UUID>` |
 | Sales report | POST | `/api/dynamic-report/ban-hang` | `typeReport=SO_CHI_TIET_BAN_HANG` |
-| Purchase report | POST | `/api/dynamic-report/mua-hang` | **Currently failing**; see below |
+| Purchase report | POST | `/api/dynamic-report/mua-hang` | Full observed body; rows under `data` |
 
 All five are connector constants. None of them is operator-configurable, so there is no route for an operator to point UniOps at an unobserved endpoint.
 
@@ -27,9 +27,9 @@ The HTTP transport rejects methods other than GET and POST. POST is allowed only
 Every live read is scoped by two things, neither of them the `companyID` query parameter:
 
 - the **bearer token**, whose `orgGetData`/`org` claims carry the organisation;
-- the **`group` request header** (observed value `GROUPDS2`), which selects the data group.
+- the **`group` request header**, which selects the data group; read your own value from any EasyBooks API call in browser developer tools.
 
-This was established directly. With `group` present the sales list returns all 35 documents whether `companyID` is empty or populated; with `group` absent every filtered read returns an **empty array rather than an error**. A missing group is therefore indistinguishable from an empty accounting period, so live mode refuses to start without `UNIOPS_EASYBOOKS_GROUP`. `companyID` is retained as a request dimension but is no longer required, matching observed requests that send it empty.
+This was established directly. With the correct `group` present the sales list returns all 35 documents whether `companyID` is empty or populated; with `group` absent every filtered read returns an **empty array rather than an error**. A missing group is therefore indistinguishable from an empty accounting period, so live mode refuses to start without `UNIOPS_EASYBOOKS_GROUP`. `companyID` is retained as a request dimension but is no longer required, matching observed requests that send it empty.
 
 ### Sales list
 
@@ -102,11 +102,25 @@ Because a header-only run hashes a fixed "not retrieved" marker in place of line
 
 The default live window overlaps the previous seven days because no trustworthy EasyBooks `updatedAt` field has been identified. Re-running overlapping windows is safe.
 
-### Purchase report status
+### Purchase report
 
-`POST /api/dynamic-report/mua-hang` returns HTTP 500 with a server-side `java.lang.NullPointerException` in `DynamicReportMuaHangServiceImpl.getDataDynamicReport`. The request body has never been directly observed and the current `{companyID, fromDate, toDate}` is incomplete; the server resolves the company from the token regardless. Adding the `group` header does not change it.
+The report was previously sent as `{companyID, fromDate, toDate}`, which the server rejected with HTTP 500 and a `java.lang.NullPointerException` in `DynamicReportMuaHangServiceImpl.getDataDynamicReport`: the body was missing fields it dereferences unconditionally. UniOps now reproduces the observed body in full.
 
-A failing purchase read must not discard a healthy sales read, so it degrades to a retrieval warning and the run continues with no purchase rows. Fixing it needs one directly observed `mua-hang` request body.
+Only `fromDate`, `toDate`, and `companyID` vary. Everything else is the constant the EasyBooks web application sends, including `typeReport=SO_CHI_TIET_MUA_HANG`, `fileName=SoNhatKiMuaHang.xlsx`, `typeReportConfig=11`, empty filter strings, and empty `accountingObjects` / `listMaterialGoods` / `listRSProductionOrderID` arrays.
+
+The response is an envelope; the rows sit under `data`. Each row carries `totalResult`, which is a result-set row count rather than money and is never normalized into an amount.
+
+#### Secondary dates — semantics unknown
+
+The observed request carried `fromDateSecond` and `toDateSecond` both set to the **current date** while the report range was `2026-05-01..2026-09-08`. They are therefore demonstrably not the report range, and their actual meaning has not been observed.
+
+They are reproduced because the real UI sends them, their construction is isolated in `EasyBooksClient._secondary_report_dates`, and no business logic reads them. The value is the current EasyBooks business date in `Asia/Ho_Chi_Minh`: using UTC would roll over seven hours early and send the wrong day. The clock is injected through the client's `today` argument so tests freeze it instead of depending on the wall clock.
+
+#### Pagination is not required
+
+The body carries `itemsPerPage: 30` and `page: 1`, so paging had to be ruled out rather than assumed. Against the live account, pages 1, 2, and 3 returned **byte-identical** payloads (same SHA-256, verified stable across refetches) and a single response held all 32 rows for the window despite the page size of 30.
+
+The server ignores `page`. No page iteration is implemented. The parameter is still sent as the observed constant, and `purchase_report(page=...)` exists only so the finding can be re-verified.
 
 ## Fixture contract
 

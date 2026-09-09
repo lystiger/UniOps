@@ -411,3 +411,128 @@ def test_headers_only_leaves_the_customer_code_unset_rather_than_guessing(sessio
     assert run.reconciliation_warnings == 0
     assert _count(session, Customer) == 0
     assert session.scalar(select(SalesDocument)).accounting_object_code is None
+
+
+def _service_purchase_rows():
+    """Synthetic service purchase: zero unit price, non-zero purchase value."""
+    return [
+        {
+            "refID": "synthetic-purchase-001",
+            "typeID": "PURCHASE_SERVICE",
+            "maKH": "NCC-SYNTH-01",
+            "tenKH": "Synthetic Service Vendor",
+            "ngayHachToan": "2026-06-02",
+            "ngayCTu": "2026-06-02",
+            "soCTu": "MH-SYNTH-0001",
+            "soHoaDon": "SYNTH-0001",
+            "mahang": "SERVICE-WATER",
+            "tenhang": "Synthetic water service",
+            "dvt": "month",
+            "soLuongMua": "1.0000",
+            "donGia": "0E-10",
+            "giaTriMua": "1800000.00",
+            "chietKhau": "0E-10",
+            "tyGia": "1.000000",
+            "totalResult": 2,
+        },
+        {
+            "refID": "synthetic-purchase-001",
+            "typeID": "PURCHASE_SERVICE",
+            "maKH": "NCC-SYNTH-01",
+            "tenKH": "Synthetic Service Vendor",
+            "ngayHachToan": "2026-06-02",
+            "ngayCTu": "2026-06-02",
+            "soCTu": "MH-SYNTH-0001",
+            "mahang": "PAPER-SYNTH-02",
+            "tenhang": "Synthetic paper stock",
+            "dvt": "kg",
+            "soLuongMua": "200.0000",
+            "donGia": "1250.0000",
+            "giaTriMua": "250000.00",
+            "chietKhau": "0E-10",
+            "tyGia": "1.000000",
+            "totalResult": 2,
+        },
+    ]
+
+
+def test_service_purchase_keeps_a_zero_unit_price_with_a_real_amount(session):
+    sync_bundle(session, FixtureBundle(purchase_rows=_service_purchase_rows()))
+
+    service = session.scalar(
+        select(PurchaseLine).where(PurchaseLine.material_goods_code == "SERVICE-WATER")
+    )
+    document = session.scalar(select(PurchaseDocument))
+
+    assert service.unit_price == Decimal("0")
+    assert service.purchase_amount == Decimal("1800000.00")
+    # giaTriMua is authoritative: quantity * unit price would have given zero.
+    assert service.quantity * service.unit_price == Decimal("0")
+    assert document.total_purchase_amount == Decimal("2050000.00")
+
+
+def test_purchase_rows_group_into_one_document_per_ref_id(session):
+    run = sync_bundle(session, FixtureBundle(purchase_rows=_service_purchase_rows()))
+
+    assert run.documents_seen == 1
+    assert _count(session, PurchaseDocument) == 1
+    assert _count(session, PurchaseLine) == 2
+
+
+def test_aggregate_total_result_is_not_a_purchase_amount(session):
+    sync_bundle(session, FixtureBundle(purchase_rows=_service_purchase_rows()))
+
+    document = session.scalar(select(PurchaseDocument))
+    # totalResult is result-set metadata; it must never reach a money column.
+    assert document.total_purchase_amount == Decimal("2050000.00")
+    assert document.total_purchase_amount != Decimal("2")
+
+
+def test_a_purchase_row_without_a_ref_id_still_gets_a_deterministic_key(session):
+    rows = [row | {"refID": None} for row in _service_purchase_rows()]
+
+    first = sync_bundle(session, FixtureBundle(purchase_rows=rows))
+    second = sync_bundle(session, FixtureBundle(purchase_rows=list(rows)))
+
+    document = session.scalar(select(PurchaseDocument))
+    assert document.source_id.startswith("fallback:")
+    assert first.documents_created == 1
+    assert second.documents_unchanged == 1
+
+
+def test_repeated_purchase_sync_is_idempotent(session):
+    first = sync_bundle(session, FixtureBundle(purchase_rows=_service_purchase_rows()))
+    raw_count = _count(session, EasyBooksRawRecord)
+    line_ids = sorted(session.scalars(select(PurchaseLine.id)))
+
+    second = sync_bundle(session, FixtureBundle(purchase_rows=_service_purchase_rows()))
+
+    assert first.documents_created == 1
+    assert second.documents_created == 0
+    assert second.documents_unchanged == 1
+    assert _count(session, EasyBooksRawRecord) == raw_count
+    assert sorted(session.scalars(select(PurchaseLine.id))) == line_ids
+
+
+def test_a_changed_purchase_payload_updates_normalized_data_and_keeps_raw_versions(session):
+    sync_bundle(session, FixtureBundle(purchase_rows=_service_purchase_rows()))
+    raw_count = _count(session, EasyBooksRawRecord)
+
+    changed = _service_purchase_rows()
+    changed[0]["giaTriMua"] = "1900000.00"
+    run = sync_bundle(session, FixtureBundle(purchase_rows=changed))
+
+    assert run.documents_updated == 1
+    assert _count(session, EasyBooksRawRecord) == raw_count + 1
+    document = session.scalar(select(PurchaseDocument))
+    assert document.total_purchase_amount == Decimal("2150000.00")
+    assert _count(session, PurchaseLine) == 2
+
+
+def test_purchase_report_envelope_rows_are_located(session):
+    from app.integrations.easybooks.sync import _extract_rows
+
+    # The live report answers with an envelope whose rows sit under "data".
+    assert _extract_rows({"data": _service_purchase_rows(), "totalResult": 2}) == (
+        _service_purchase_rows()
+    )
