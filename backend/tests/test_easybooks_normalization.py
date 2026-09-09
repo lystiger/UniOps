@@ -2,10 +2,12 @@ from decimal import Decimal
 
 import pytest
 from app.integrations.easybooks.normalization import (
+    group_purchase_rows,
     normalize_purchase_document,
     normalize_purchase_lines,
     normalize_sales_document,
     normalize_sales_lines,
+    payload_hash,
     reconcile_sales,
     sales_customer_code,
     source_decimal,
@@ -162,3 +164,43 @@ def test_lines_that_disagree_on_customer_code_warn_instead_of_picking_one():
 
     assert code is None
     assert warnings == ["sales lines disagree on customer code: ['KH-01', 'KH-02']"]
+
+
+def test_purchase_rows_group_in_a_stable_order_whatever_the_source_order():
+    """The report permutes a document's rows between identical requests."""
+    rows = [
+        {"refID": "doc-1", "mahang": "B", "giaTriMua": "20.00"},
+        {"refID": "doc-1", "mahang": "A", "giaTriMua": "10.00"},
+        {"refID": "doc-1", "mahang": "C", "giaTriMua": "30.00"},
+    ]
+    forward = group_purchase_rows(rows)
+    reversed_order = group_purchase_rows(list(reversed(rows)))
+    shuffled = group_purchase_rows([rows[2], rows[0], rows[1]])
+
+    assert forward == reversed_order == shuffled
+    assert [row["mahang"] for row in forward["doc-1"]] == ["A", "B", "C"]
+
+
+def test_a_permuted_document_hashes_identically():
+    rows = [
+        {"refID": "doc-1", "mahang": "B", "giaTriMua": "20.00"},
+        {"refID": "doc-1", "mahang": "A", "giaTriMua": "10.00"},
+    ]
+    first = payload_hash(group_purchase_rows(rows)["doc-1"])
+    second = payload_hash(group_purchase_rows(list(reversed(rows)))["doc-1"])
+
+    assert first == second
+
+
+def test_grouping_still_separates_distinct_documents():
+    grouped = group_purchase_rows(
+        [
+            {"refID": "doc-2", "mahang": "A"},
+            {"refID": "doc-1", "mahang": "A"},
+            {"refID": "doc-1", "mahang": "B"},
+        ]
+    )
+
+    assert sorted(grouped) == ["doc-1", "doc-2"]
+    assert len(grouped["doc-1"]) == 2
+    assert len(grouped["doc-2"]) == 1

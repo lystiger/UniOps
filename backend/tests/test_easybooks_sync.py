@@ -536,3 +536,43 @@ def test_purchase_report_envelope_rows_are_located(session):
     assert _extract_rows({"data": _service_purchase_rows(), "totalResult": 2}) == (
         _service_purchase_rows()
     )
+
+
+def test_a_permuted_purchase_document_is_unchanged_not_updated(session):
+    """The live report permutes rows between identical requests."""
+    rows = _service_purchase_rows()
+    first = sync_bundle(session, FixtureBundle(purchase_rows=rows))
+    raw_count = _count(session, EasyBooksRawRecord)
+
+    second = sync_bundle(session, FixtureBundle(purchase_rows=list(reversed(rows))))
+
+    assert first.documents_created == 1
+    assert second.documents_unchanged == 1
+    assert second.documents_updated == 0
+    # No spurious raw version: the raw table must not grow on unchanged data.
+    assert _count(session, EasyBooksRawRecord) == raw_count
+
+
+def test_repeated_permutation_never_grows_the_raw_table(session):
+    rows = _service_purchase_rows()
+    sync_bundle(session, FixtureBundle(purchase_rows=rows))
+    raw_count = _count(session, EasyBooksRawRecord)
+
+    for _ in range(4):
+        sync_bundle(session, FixtureBundle(purchase_rows=list(reversed(rows))))
+        sync_bundle(session, FixtureBundle(purchase_rows=rows))
+
+    assert _count(session, EasyBooksRawRecord) == raw_count
+    assert _count(session, PurchaseDocument) == 1
+    assert _count(session, PurchaseLine) == 2
+
+
+def test_a_genuine_purchase_change_is_still_detected_after_sorting(session):
+    rows = _service_purchase_rows()
+    sync_bundle(session, FixtureBundle(purchase_rows=rows))
+
+    changed = [row | {} for row in reversed(rows)]
+    changed[0]["giaTriMua"] = "9999.00"
+    run = sync_bundle(session, FixtureBundle(purchase_rows=changed))
+
+    assert run.documents_updated == 1

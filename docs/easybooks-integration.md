@@ -169,6 +169,14 @@ Because a header-only run hashes a fixed "not retrieved" marker in place of line
 
 The default live window overlaps the previous seven days because no trustworthy EasyBooks `updatedAt` field has been identified. Re-running overlapping windows is safe.
 
+### Purchase report row order is unstable
+
+The report returns a document's rows in a different order between identical requests. The same unchanged document was observed coming back permuted, with row contents intact.
+
+Hashing the rows as received therefore produced a different payload hash every run, so unchanged documents were stored as new raw versions and reported as updated, and the raw table grew on every sync without any source change. Across a full-year window this affected 5 of 55 purchase documents per run.
+
+Rows are now ordered by canonical content when grouped into a document. The source order carries no meaning, so nothing is lost, and an unchanged document hashes identically every time. Four consecutive live runs over 2026 now report all 166 documents unchanged with the raw record count static.
+
 ### Purchase report
 
 The report was previously sent as `{companyID, fromDate, toDate}`, which the server rejected with HTTP 500 and a `java.lang.NullPointerException` in `DynamicReportMuaHangServiceImpl.getDataDynamicReport`: the body was missing fields it dereferences unconditionally. UniOps now reproduces the observed body in full.

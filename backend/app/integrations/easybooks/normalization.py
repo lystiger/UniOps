@@ -197,10 +197,21 @@ def purchase_document_key(source: dict[str, Any]) -> str:
 
 
 def group_purchase_rows(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Group purchase rows by document, ordering each group deterministically.
+
+    The purchase report returns a document's rows in an unstable order: the same
+    unchanged document was observed coming back with its rows permuted between
+    consecutive requests. Left alone that made the payload hash differ every run,
+    so unchanged documents were stored as new raw versions and reported as
+    updated, and the raw table grew without bound.
+
+    Sorting by canonical content loses nothing, since the source order carries no
+    meaning, and it makes an unchanged document hash identically every time.
+    """
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         grouped[purchase_document_key(row)].append(row)
-    return dict(grouped)
+    return {key: sorted(value, key=canonical_json) for key, value in grouped.items()}
 
 
 def normalize_purchase_document(source_id: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
