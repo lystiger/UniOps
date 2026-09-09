@@ -88,7 +88,7 @@ UNIOPS_EASYBOOKS_PASSWORD=
 
 The token is read from the response under `id_token`, with `idToken`, `token`, `access_token`, `accessToken` and `jwt` also accepted. An unrecognised response is refused, naming the keys that came back so it can be diagnosed, rather than guessed at.
 
-**Unverified end to end.** See the two-token problem below before relying on this.
+Verified end to end against a live account: with no token configured UniOps signed in, obtained a token carrying `org`, `orgGetData` and `yearWork`, and ingested 56 documents. With a deliberately invalid token configured alongside credentials it renewed and completed the run. Tokens issued this way lasted 24 hours, which no longer matters because renewal is automatic.
 
 A token is fetched at startup when none is configured, and renewed **once** when a request is rejected, after which that request is retried. A renewed token that is also rejected is terminal, so a bad password cannot cause a refresh loop. Without credentials a rejection stays terminal as before. Neither the password nor the token is ever logged or included in a raised message.
 
@@ -117,7 +117,11 @@ The client performs two steps, and UniOps reproduces them:
 1. `POST /api/login-by-user` with the credentials, answering with `isOTP` and `orgTrees`;
 2. `POST /api/authenticate` with the credentials plus the chosen `org`, answering with the token in `id_token` or in the `Authorization` response header. Both are read.
 
-The organisation is taken from `UNIOPS_EASYBOOKS_ORG` when set, otherwise from the pre-login response when the account offers exactly one. An ambiguous choice is refused rather than guessed, naming the setting to configure. The value is the `org` claim of any working token.
+The organisation is taken from `UNIOPS_EASYBOOKS_ORG` when set, otherwise from the pre-login response when the account offers exactly one. An ambiguous choice is refused rather than guessed.
+
+A configured organisation the account does not offer is refused by name. **It is not the company ID**, and pasting one there produces a sign-in rejection that otherwise looks exactly like a wrong password. Leaving the setting empty is correct for a single-organisation account.
+
+The two failures are reported separately: credentials rejected at pre-login blame the username and password, while a rejection at authenticate blames the organisation, since the credentials have already been accepted by then.
 
 An account requiring a one-time password cannot sign in unattended, so `isOTP` is refused up front with an explanation rather than a failed authenticate.
 

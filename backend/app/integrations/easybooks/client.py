@@ -50,15 +50,13 @@ PURCHASE_REPORT_ITEMS_PER_PAGE = 30
 PURCHASE_REPORT_FIRST_PAGE = 1
 
 
-def _org_from_trees(details: Any) -> str:
-    """Pick the organisation to sign in against from the pre-login response.
+def _orgs_from_trees(details: Any) -> list[str]:
+    """List the organisations the account may sign in against.
 
-    The web client lets a person choose from a tree. Unattended, only an
-    unambiguous single organisation can be chosen; anything else must be
-    configured rather than guessed.
+    The web client shows these as a tree for a person to choose from.
     """
     trees = details.get("orgTrees") if isinstance(details, dict) else None
-    candidates: list[str] = []
+    found: list[str] = []
     if isinstance(trees, list):
         for node in trees:
             if not isinstance(node, dict):
@@ -66,14 +64,8 @@ def _org_from_trees(details: Any) -> str:
             parent = node.get("parent")
             value = parent.get("id") if isinstance(parent, dict) else node.get("id")
             if isinstance(value, str) and value.strip():
-                candidates.append(value.strip())
-    unique = sorted(set(candidates))
-    if len(unique) == 1:
-        return unique[0]
-    raise EasyBooksAuthError(
-        f"cannot choose an EasyBooks organisation automatically ({len(unique)} offered); "
-        "set UNIOPS_EASYBOOKS_ORG to the org claim of a working token"
-    )
+                found.append(value.strip())
+    return sorted(set(found))
 
 
 def _token_from(response: Any) -> str:
@@ -226,7 +218,10 @@ class HttpxReadOnlyTransport:
         # it carries no org/orgGetData/yearWork scoping. The org must be supplied.
         pre_login = self._client.post(PRE_LOGIN_PATH, json=credentials)
         if self._is_auth_failure(pre_login) or pre_login.status_code >= 400:
-            raise EasyBooksAuthError(self._bad_credentials_message())
+            raise EasyBooksAuthError(
+                "EasyBooks rejected the configured username and password. Check "
+                "UNIOPS_EASYBOOKS_USERNAME and UNIOPS_EASYBOOKS_PASSWORD."
+            )
         details = pre_login.json() if pre_login.content else {}
         if isinstance(details, dict) and details.get("isOTP"):
             raise EasyBooksAuthError(
@@ -234,21 +229,44 @@ class HttpxReadOnlyTransport:
                 "sign in unattended. Configure UNIOPS_EASYBOOKS_BEARER_TOKEN instead, "
                 "or use an account without OTP."
             )
-        org = self._settings.easybooks_org or _org_from_trees(details)
+        org = self._choose_org(details)
 
         response = self._client.post(
             AUTHENTICATE_PATH,
             json={**credentials, "org": org, "otp": False, "secretCode": ""},
         )
         if self._is_auth_failure(response) or response.status_code >= 400:
-            raise EasyBooksAuthError(self._bad_credentials_message())
+            # The credentials already passed pre-login, so the organisation is the
+            # remaining variable. Say so rather than blaming the password.
+            raise EasyBooksAuthError(
+                "EasyBooks accepted the username and password but refused the sign-in "
+                "for this organisation. Check UNIOPS_EASYBOOKS_ORG, or leave it unset "
+                "to use the organisation the account reports."
+            )
         self._client.headers["Authorization"] = f"Bearer {_token_from(response)}"
 
-    @staticmethod
-    def _bad_credentials_message() -> str:
-        return (
-            "EasyBooks rejected the configured username and password. Check "
-            "UNIOPS_EASYBOOKS_USERNAME and UNIOPS_EASYBOOKS_PASSWORD."
+    def _choose_org(self, details: Any) -> str:
+        """Pick the organisation, preferring an explicit setting but validating it.
+
+        A configured value that the account does not offer is a misconfiguration -
+        the company ID is easily pasted here by mistake - and signing in with it
+        yields a rejection that looks like a bad password. Reject it by name instead.
+        """
+        offered = _orgs_from_trees(details)
+        configured = self._settings.easybooks_org
+        if configured:
+            if offered and configured not in offered:
+                raise EasyBooksAuthError(
+                    f"UNIOPS_EASYBOOKS_ORG is not an organisation this account can use; "
+                    f"it offers {len(offered)}. Leave the setting unset to use the "
+                    f"reported organisation, and note it is not the company ID."
+                )
+            return configured
+        if len(offered) == 1:
+            return offered[0]
+        raise EasyBooksAuthError(
+            f"cannot choose an EasyBooks organisation automatically ({len(offered)} offered); "
+            "set UNIOPS_EASYBOOKS_ORG to one the account can use"
         )
 
     @staticmethod
@@ -284,9 +302,10 @@ class HttpxReadOnlyTransport:
             )
         return (
             f"EasyBooks rejected the credential (HTTP {status_code}). The bearer "
-            "token has most likely expired - they last 30 days. Copy a current one "
-            "from an authenticated browser session into "
-            "UNIOPS_EASYBOOKS_BEARER_TOKEN."
+            "token has most likely expired. Copy a current one from an "
+            "authenticated browser session into UNIOPS_EASYBOOKS_BEARER_TOKEN, or "
+            "set UNIOPS_EASYBOOKS_USERNAME and UNIOPS_EASYBOOKS_PASSWORD so UniOps "
+            "renews its own."
         )
 
 

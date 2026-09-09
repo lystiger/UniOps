@@ -10,7 +10,7 @@ from app.integrations.easybooks.client import (
     EasyBooksAuthError,
     EasyBooksConfigurationError,
     HttpxReadOnlyTransport,
-    _org_from_trees,
+    _orgs_from_trees,
     _token_from,
 )
 
@@ -121,17 +121,20 @@ def test_login_sends_the_observed_two_step_payloads(monkeypatch):
     assert transport._client.headers["Authorization"] == "Bearer fresh-token"
 
 
-def test_a_configured_org_overrides_discovery(monkeypatch):
-    import json
-
+def test_a_rejected_organisation_is_not_reported_as_a_bad_password(monkeypatch):
     monkeypatch.setattr(HttpxReadOnlyTransport, "_log_in", lambda self: None)
-    transport = HttpxReadOnlyTransport(_settings(easybooks_org="configured-org"))
+    transport = HttpxReadOnlyTransport(_settings())
     monkeypatch.undo()
-    calls = _scripted(transport, _ok_login())
+    _scripted(
+        transport,
+        [
+            (PRE_LOGIN_PATH, httpx.Response(200, json=ONE_ORG)),
+            (AUTHENTICATE_PATH, httpx.Response(500, json=AUTH_DENIED)),
+        ],
+    )
 
-    transport._log_in()
-
-    assert json.loads(calls[1][1])["org"] == "configured-org"
+    with pytest.raises(EasyBooksAuthError, match="refused the sign-in for this organisation"):
+        transport._log_in()
 
 
 def test_an_account_needing_an_otp_is_refused_with_an_explanation(monkeypatch):
@@ -238,19 +241,38 @@ def test_the_refusal_names_what_came_back_so_it_can_be_diagnosed():
         _token_from(_response({"expiresIn": 3600, "unexpected": "shape"}))
 
 
-def test_a_single_organisation_is_chosen_automatically():
-    assert _org_from_trees(ONE_ORG) == SYNTHETIC_ORG
+def test_the_offered_organisations_are_read_from_the_tree():
+    assert _orgs_from_trees(ONE_ORG) == [SYNTHETIC_ORG]
+    assert _orgs_from_trees({"orgTrees": []}) == []
+    assert _orgs_from_trees({}) == []
+
+
+def _choose(details, **overrides):
+    import unittest.mock as mock
+
+    transport = mock.Mock()
+    transport._settings = _settings(**overrides)
+    return HttpxReadOnlyTransport._choose_org(transport, details)
+
+
+def test_a_single_offered_organisation_is_chosen_automatically():
+    assert _choose(ONE_ORG) == SYNTHETIC_ORG
 
 
 def test_an_ambiguous_organisation_must_be_configured_not_guessed():
     two = {"orgTrees": [{"parent": {"id": "org-a"}}, {"parent": {"id": "org-b"}}]}
-    with pytest.raises(EasyBooksAuthError, match="UNIOPS_EASYBOOKS_ORG"):
-        _org_from_trees(two)
+    with pytest.raises(EasyBooksAuthError, match="2 offered"):
+        _choose(two)
 
 
-def test_no_organisation_offered_is_also_refused():
-    with pytest.raises(EasyBooksAuthError, match="UNIOPS_EASYBOOKS_ORG"):
-        _org_from_trees({"orgTrees": []})
+def test_a_configured_organisation_the_account_cannot_use_is_rejected_by_name():
+    """The company ID is easily pasted here; signing in with it looks like a bad password."""
+    with pytest.raises(EasyBooksAuthError, match="not an organisation this account can use"):
+        _choose(ONE_ORG, easybooks_org="a-company-id-not-an-org")
+
+
+def test_a_configured_organisation_the_account_offers_is_used():
+    assert _choose(ONE_ORG, easybooks_org=SYNTHETIC_ORG) == SYNTHETIC_ORG
 
 
 def test_live_mode_still_needs_some_credential():
