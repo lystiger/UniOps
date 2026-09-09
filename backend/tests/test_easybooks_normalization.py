@@ -7,6 +7,7 @@ from app.integrations.easybooks.normalization import (
     normalize_sales_document,
     normalize_sales_lines,
     reconcile_sales,
+    sales_customer_code,
     source_decimal,
 )
 
@@ -139,3 +140,25 @@ def test_repeated_normalization_of_the_same_detail_is_stable():
     second = normalize_sales_lines("doc-1", payload)
 
     assert first[0]["source_line_key"] == second[0]["source_line_key"]
+
+
+def test_customer_code_comes_from_lines_when_they_agree():
+    lines = [
+        {"accounting_object_code": "KH-01", "amount": Decimal("10")},
+        {"accounting_object_code": "KH-01", "amount": Decimal("20")},
+    ]
+    assert sales_customer_code(lines) == ("KH-01", [])
+
+
+def test_no_customer_code_on_any_line_is_not_an_error():
+    assert sales_customer_code([{"accounting_object_code": None}]) == (None, [])
+    assert sales_customer_code([]) == (None, [])
+
+
+def test_lines_that_disagree_on_customer_code_warn_instead_of_picking_one():
+    code, warnings = sales_customer_code(
+        [{"accounting_object_code": "KH-01"}, {"accounting_object_code": "KH-02"}]
+    )
+
+    assert code is None
+    assert warnings == ["sales lines disagree on customer code: ['KH-01', 'KH-02']"]

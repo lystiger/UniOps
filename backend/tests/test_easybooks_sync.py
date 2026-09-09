@@ -312,3 +312,102 @@ def test_headers_only_live_read_skips_the_detail_route(session):
 
     assert run.documents_created == 2
     assert _count(session, SalesLine) == 0
+
+
+def _document_without_customer_code():
+    """Mirrors the live list: it names the customer but carries no code."""
+    return {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "accountingObjectName": "Sanitized Customer Ten",
+        "totalAmount": "100.00",
+        "totalAllAmount": "100.00",
+    }
+
+
+def test_customer_is_catalogued_from_the_line_level_code(session):
+    bundle = FixtureBundle(
+        sales_documents=[_document_without_customer_code()],
+        sales_lines={
+            "33333333-3333-3333-3333-333333333333": [
+                {"accountingObjectCode": "KH-LINE-01", "amount": "100.00"}
+            ]
+        },
+    )
+
+    run = sync_bundle(session, bundle)
+
+    customer = session.scalar(select(Customer))
+    assert run.reconciliation_warnings == 0
+    assert customer is not None
+    # Code comes from the line, name from the header.
+    assert customer.easybooks_accounting_object_code == "KH-LINE-01"
+    assert customer.name == "Sanitized Customer Ten"
+    document = session.scalar(select(SalesDocument))
+    assert document.accounting_object_code == "KH-LINE-01"
+
+
+def test_a_header_code_is_not_overridden_by_the_lines(session):
+    source = _document_without_customer_code() | {"accountingObjectCode": "KH-HEADER-01"}
+    bundle = FixtureBundle(
+        sales_documents=[source],
+        sales_lines={
+            "33333333-3333-3333-3333-333333333333": [
+                {"accountingObjectCode": "KH-LINE-01", "amount": "100.00"}
+            ]
+        },
+    )
+
+    sync_bundle(session, bundle)
+
+    assert session.scalar(select(SalesDocument)).accounting_object_code == "KH-HEADER-01"
+
+
+def test_lines_disagreeing_on_customer_code_warn_and_catalogue_nobody(session):
+    bundle = FixtureBundle(
+        sales_documents=[_document_without_customer_code()],
+        sales_lines={
+            "33333333-3333-3333-3333-333333333333": [
+                {"accountingObjectCode": "KH-LINE-01", "amount": "50.00"},
+                {"accountingObjectCode": "KH-LINE-02", "amount": "50.00"},
+            ]
+        },
+    )
+
+    run = sync_bundle(session, bundle)
+
+    assert run.reconciliation_warnings == 1
+    assert _count(session, Customer) == 0
+    assert session.scalar(select(SalesDocument)).accounting_object_code is None
+
+
+def test_customer_linkage_from_lines_stays_idempotent(session):
+    def build():
+        return FixtureBundle(
+            sales_documents=[_document_without_customer_code()],
+            sales_lines={
+                "33333333-3333-3333-3333-333333333333": [
+                    {"accountingObjectCode": "KH-LINE-01", "amount": "100.00"}
+                ]
+            },
+        )
+
+    first = sync_bundle(session, build())
+    second = sync_bundle(session, build())
+
+    assert first.documents_created == 1
+    assert second.documents_unchanged == 1
+    assert _count(session, Customer) == 1
+
+
+def test_headers_only_leaves_the_customer_code_unset_rather_than_guessing(session):
+    bundle = FixtureBundle(
+        sales_documents=[_document_without_customer_code()],
+        sales_lines={},
+        sales_lines_available=False,
+    )
+
+    run = sync_bundle(session, bundle, mode="live-headers")
+
+    assert run.reconciliation_warnings == 0
+    assert _count(session, Customer) == 0
+    assert session.scalar(select(SalesDocument)).accounting_object_code is None

@@ -17,6 +17,7 @@ from app.integrations.easybooks.normalization import (
     normalize_sales_lines,
     payload_hash,
     reconcile_sales,
+    sales_customer_code,
 )
 from app.models import (
     Customer,
@@ -301,11 +302,19 @@ def _upsert_sales(
     normalized = normalize_sales_document(source)
     source_id = normalized["source_id"]
     lines = normalize_sales_lines(source_id, raw_lines) if lines_available else []
+    warnings = reconcile_sales(normalized, lines) if lines_available else []
+    # The header names the customer but does not code it, so take the code from the
+    # lines. Without this the document has no canonical customer to link to. A
+    # header-only read leaves it unset rather than guessing.
+    if lines_available and not normalized["accounting_object_code"]:
+        code, code_warnings = sales_customer_code(lines)
+        if code:
+            normalized["accounting_object_code"] = code
+        warnings.extend(code_warnings)
     # A header-only read hashes a fixed marker instead of an empty line list, so
     # repeated header-only runs stay idempotent and never look like line deletion.
     line_fingerprint: Any = lines if lines_available else "not-retrieved"
     combined_hash = payload_hash({"document": normalized, "lines": line_fingerprint})
-    warnings = reconcile_sales(normalized, lines) if lines_available else []
     _preserve_raw(session, run, "sales_document", source_id, source)
     if lines_available:
         _preserve_raw(session, run, "sales_lines", source_id, raw_lines)

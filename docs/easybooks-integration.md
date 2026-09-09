@@ -128,6 +128,14 @@ Fixture mode accepts one JSON object:
 
 Sales headers require the stable source `id`; it becomes `sales_documents.source_id`. Details are associated with the document ID used in the `sAInvoiceID` request parameter—never with the detail response's own `id` or `sAInvoiceID`, both of which have been observed as null.
 
+#### Customer identity
+
+The sales list names the customer (`accountingObjectName`, `accountingObjectAddress`) but carries **no** `accountingObjectCode`. The code appears only on detail lines, which in turn carry no name. Neither half identifies a customer alone, so UniOps pairs them: the code comes from the lines, the name from the header.
+
+Observed across 35 live documents: every line carried a code, no document's lines disagreed, and 35 documents resolved to 12 distinct customers with no unlinked document. The codes are 10- or 14-digit Vietnamese tax codes, the 14-digit form being a branch suffix, so the identity is stable rather than a name match.
+
+A header that already supplies a code keeps it; the lines never override it. Lines that disagree on a code yield no code and a reconciliation warning rather than an arbitrary pick. A header-only read has no lines, so it leaves the code unset instead of guessing—meaning header-only runs catalogue no customers.
+
 Document-level money comes from `totalAmount` (subtotal), `totalDiscountAmount`, `totalVATAmount` (VAT), and `totalAllAmount` (grand total). The list also carries a `total` field: that is **result-set/report metadata**, not a document amount. EasyBooks populates it with a large aggregate on the first returned row and leaves it `null` on the rest, so UniOps never normalizes it into a document's financial totals.
 
 Line identity uses:

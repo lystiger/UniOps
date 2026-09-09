@@ -161,6 +161,26 @@ def normalize_sales_lines(
     return result
 
 
+def sales_customer_code(lines: list[dict[str, Any]]) -> tuple[str | None, list[str]]:
+    """Derive a sales document's customer code from its detail lines.
+
+    The observed sales list carries ``accountingObjectName`` but no
+    ``accountingObjectCode``; the code appears only on detail lines, which in turn
+    carry no name. Pairing the two is what links an EasyBooks document to a
+    canonical customer.
+
+    Every observed document agreed on one code across its lines. Disagreement is
+    therefore unexpected rather than routine, so it yields no code and a warning
+    instead of an arbitrary pick.
+    """
+    codes = {code for line in lines if (code := _text(line.get("accounting_object_code")))}
+    if not codes:
+        return None, []
+    if len(codes) > 1:
+        return None, [f"sales lines disagree on customer code: {sorted(codes)}"]
+    return codes.pop(), []
+
+
 def purchase_document_key(source: dict[str, Any]) -> str:
     ref_id = _text(source.get("refID"))
     if ref_id:
