@@ -52,7 +52,7 @@
   /* Typography System */
   --font-sans: "Be Vietnam Pro", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-compact: "Inter Tight", -apple-system, BlinkMacSystemFont, "SF Compact Display", "SF Compact Text", ui-sans-serif, sans-serif;
-  --font-mono: "Inter Tight", monospace;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   /* Radii & Motion */
   --radius-card: 8px;
@@ -744,11 +744,39 @@ input:hover, select:hover, textarea:hover {
   border-color: var(--ink-muted);
 }
 
-/* Specific inputs using compact font for numbers and codes */
+/* Specific inputs using compact font for numbers and monospace for codes */
 input[type="date"],
-input[inputmode="decimal"],
-.code-input {
+input[type="number"],
+input[inputmode="decimal"] {
   font-family: var(--font-compact);
+}
+
+.code-input,
+code,
+kbd,
+samp,
+pre,
+.font-mono,
+.text-mono {
+  font-family: var(--font-mono);
+}
+
+/* Tabular Numerals for Financial Data, Numbers, and Metrics */
+.tabular-nums,
+.stat-value,
+.data-table td,
+.accounting-facts dd,
+.due-row strong,
+.invoice-list small,
+.range-summary strong,
+.day-cell,
+.line-index,
+.section-count,
+input[type="date"],
+input[type="number"],
+input[inputmode="decimal"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 /* ==========================================================================
@@ -914,10 +942,10 @@ input[inputmode="decimal"],
 
 .order-number {
   color: var(--ink-muted);
-  font-family: var(--font-compact);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .order-card h3 {
@@ -1344,10 +1372,11 @@ input[inputmode="decimal"],
 
 .accounting-panel h2 {
   margin: 0;
-  font-family: var(--font-compact);
-  font-size: 22px;
+  font-family: var(--font-mono);
+  font-size: 20px;
   font-weight: 600;
   color: var(--ink);
+  letter-spacing: -0.01em;
 }
 
 .accounting-panel h3 {
@@ -1412,10 +1441,11 @@ input[inputmode="decimal"],
 }
 
 .invoice-list strong {
-  font-family: var(--font-compact);
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
   color: var(--ink);
+  letter-spacing: 0.01em;
 }
 
 .invoice-list small {
