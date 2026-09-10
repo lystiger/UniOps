@@ -2,6 +2,9 @@
 
 This checklist provides a reproducible, step-by-step test script for internal pilot participants (Director, Office/Secretary, Factory Staff, Finance).
 
+> [!IMPORTANT]
+> **Pilot Language**: The internal UI/UX pilot is conducted primarily in **Vietnamese (`vi`)**, the default system language. English (`en`) is available for dual-language evaluation. Participants are encouraged to evaluate terminology clarity against [docs/glossary-vi.md](glossary-vi.md).
+
 ---
 
 ## 1. Participant Roles & Credentials
@@ -25,18 +28,25 @@ uv run uniops user create --username factory_lead --role factory-read --full-nam
 
 ## 2. Step-by-Step Pilot Test Script
 
-### Step 1: Sign In & Authentication Check
+### Step 1: Sign In, Language Switcher & Authentication Check
 1. Open the UniOps application URL (e.g. `http://localhost:5173` in development or internal server port).
-2. Enter username and password on the login screen.
-3. Click the password visibility toggle ("eye" button) to verify clear/masked password states.
-4. Click **Sign in**.
-   - *Expected*: Board or Overview loads; user avatar/badge appears in topbar settings menu.
+2. **Language Switcher on Sign-in Screen**:
+   - Observe that the interface defaults to Vietnamese ("Đăng nhập", "Tên đăng nhập", "Mật khẩu").
+   - Click the **English** button in the top-right corner of the login card: verify that all labels instantly change to English ("Sign in", "Username", "Password") without reloading.
+   - Click **Tiếng Việt** to return to Vietnamese for the pilot test.
+3. Enter username and password on the login screen.
+4. Click the password visibility toggle ("eye" button) to verify clear/masked password states.
+5. Click **Đăng nhập** (Sign in).
+   - *Expected*: Board or Overview loads in Vietnamese; user avatar/badge appears in topbar settings menu.
 
-### Step 2: Account Settings & Role Inspection
-1. Click the **Settings** button in the topbar banner.
-2. Inspect the displayed username and role tag (e.g., "Office", "Admin", or "Factory Read").
-3. Verify password change dialog can be toggled.
-4. Close settings by clicking outside or pressing Escape.
+### Step 2: Account Settings, Role Inspection & Language Switch
+1. Click the **Cài đặt** (Settings) button in the topbar banner.
+2. Inspect the displayed username and role badge (e.g., "Trạng thái: Khối văn phòng", "Quản trị viên", or "Khối xưởng · Chỉ xem").
+3. **Language Switcher in Settings**:
+   - Under "Ngôn ngữ", click **English**. Verify that all navigation items and screen content immediately switch to English without page reload.
+   - Click **Tiếng Việt** to switch back to Vietnamese.
+4. Verify password change dialog ("Đổi mật khẩu") can be toggled.
+5. Close settings by clicking outside or pressing Escape.
 
 ### Step 3: Order Desk & Navigation
 1. Click **Orders** in the primary navigation.
@@ -129,6 +139,10 @@ uv run uniops user create --username factory_lead --role factory-read --full-nam
 
 ## 3. Findings & Feedback Log Template
 
-| Step # | User Role | Description of Issue or Observation | Severity (Blocker / Annoyance / Suggestion) |
-|---|---|---|---|
-| | | | |
+Record any issues, observations, or feedback on Vietnamese terminology encountered during pilot testing:
+
+| Step # | User Role | Description of Issue or Observation | Unclear Wording / Term (Glossary Key) | Suggested Term / Alternative | Severity (Blocker / Annoyance / Suggestion) |
+|---|---|---|---|---|---|
+| | | | | | |
+
+> *Note*: Refer to [docs/glossary-vi.md](glossary-vi.md) for current draft translations, accounting-sensitive flags, and alternatives under review.

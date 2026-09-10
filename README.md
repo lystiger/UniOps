@@ -397,6 +397,15 @@ Passwords are Argon2id hashes, at least 12 characters, and are never passed as c
 
 [Operations](docs/operations.md) covers accounts, sessions, the PostgreSQL deployment, and backups in full.
 
+## Languages
+
+UniOps supports two UI languages: Vietnamese (`vi`) and English (`en`).
+
+- **Default language**: Vietnamese (`vi`) is the default language for all screens and error messages.
+- **Language Switcher**: Available directly on the sign-in screen (top right) and inside the settings menu (`AccountMenu.tsx` dropdown in the topbar). Switching occurs immediately without reloading the page or losing current filters/state.
+- **Persistence**: The chosen language is stored per browser in `localStorage` under the key `uniops.locale`. If storage is cleared or unavailable, UniOps safely falls back to Vietnamese. Per-user server-side preference is not implemented.
+- **Domain Data & Numbers**: Dates (`DD/MM/YYYY`), currency (`₫`), and number formats follow `vi-VN` conventions in both languages. Raw business data (customer names, product codes, invoice numbers, EasyBooks IDs) is never translated.
+
 ## Deployment conditions
 
 These still hold, and authentication does not replace them:
