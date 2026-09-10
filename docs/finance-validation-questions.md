@@ -57,12 +57,40 @@
 
 ---
 
-## 6. Summary of Action Items for Finance Pilot
+## 6. Debit / Credit Interpretation for Future KPIs
+* **Observed Reality**:
+  * EasyBooks records transactions across Vietnamese accounting chart of accounts (e.g. Account 131 for receivables, Account 511 for revenue, Account 331 for payables, Account 152/156 for materials/inventory).
+  * The ingested sales documents expose `totalAmount`, `subtotal`, and `vatAmount`. Ingested purchases expose `total_purchase_amount` and `vat_amount`.
+  * Ingested document payloads carry no debit/credit account mappings (`tkNo` / `tkCo` are not present on sales document headers or line items).
+* **Open Questions for Bookkeeper**:
+  1. Which specific general ledger account pairings (Nợ/Có) define recognized sales revenue vs deferred revenue for customer deposits?
+  2. For receivables KPIs, should trade customer debt reflect the ending debit balance of Account 131 specifically, and how should credit balances (customer prepayments) be displayed?
+  3. When calculating gross commercial flow vs operating flow, which account transactions represent true third-party trade obligations versus internal adjustments?
 
-| Question | Current UniOps Behavior | Decision Needed From Bookkeeper |
+---
+
+## 7. Operational `INVOICED` and `CLOSED` Lifecycle vs. Invoice Linking
+* **Observed Reality**:
+  * The UniOps order lifecycle includes the progression `DELIVERED → INVOICED → CLOSED`.
+  * The Order Board provides a manual "Mark invoiced" button when an order is in `DELIVERED` status.
+  * In the current implementation, an operator can click "Mark invoiced" even if no EasyBooks invoice has been linked via the accounting panel.
+  * Conversely, an order can have a confirmed invoice link while remaining in earlier operational stages (e.g. `IN_PRODUCTION`), because operational status and accounting status are tracked independently.
+* **Open Questions for Bookkeeper & Management**:
+  1. Should advancing an order to `INVOICED` strictly require at least one confirmed EasyBooks invoice link (blocking manual advancement if unlinked)?
+  2. Or is operational `INVOICED` intended as a factory/office workflow signal (e.g., invoice request issued) independent of EasyBooks reconciliation?
+  3. Under what conditions should an order transition to `CLOSED`: upon operational delivery, upon confirmed invoice linkage, or upon full cash settlement in EasyBooks?
+
+---
+
+## 8. Summary of Action Items for Finance Pilot
+
+| Topic | Current UniOps Behavior | Decision Needed From Bookkeeper / Management |
 |---|---|---|
-| Receivables balance | Displays `—` with explanation note | Authoritative source table for customer debt (Account 131 vs dynamic report) |
-| Invoice payment status | Hardcoded `UNKNOWN` | Whether FIFO matching is permitted or explicit allocation required |
-| Due dates | Displays `—` with `UNKNOWN` due status | Standard customer credit terms table (days) |
-| Revenue KPI base | Displays gross total with separate VAT metric | Confirm whether Net or Gross is official revenue KPI |
-| Profit metrics | Only displays `Sales − Purchases` | Provide official COGS methodology if margin reports are desired in V2 |
+| 1. Receivables balance | Displays `—` with explanation note | Authoritative source for customer debt (Account 131 ledger vs dynamic report) |
+| 2. Invoice payment status | Hardcoded `UNKNOWN` | Whether FIFO matching is permitted or explicit allocation required |
+| 3. Due dates & terms | Displays `—` with `UNKNOWN` due status | Standard customer credit terms table (days) and overdue calculation base |
+| 4. Revenue KPI base | Displays gross total with separate VAT metric | Confirm whether Net or Gross is official revenue KPI |
+| 5. Profit / margin metrics | Only displays `Sales − Purchases` | Provide official COGS methodology if margin reports are desired in V2 |
+| 6. Debit / Credit KPIs | Only document amounts ingested; no ledger accounts | Specify which ledger accounts (Nợ/Có) govern future financial reporting |
+| 7. Operational Invoiced status | Allows advancing to `INVOICED` without invoice link | Confirm whether linking an invoice should be mandatory before `INVOICED` |
+

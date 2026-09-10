@@ -315,8 +315,11 @@ class ExceptionItemRead(ApiModel):
     category: ExceptionCategory
     reference: str
     detail: str
-    order_id: str | None
-    sales_document_id: str | None
+    customer_name: str | None = None
+    document_date: date | None = None
+    total_amount: Decimal | None = None
+    order_id: str | None = None
+    sales_document_id: str | None = None
 
 
 class ExceptionGroupRead(ApiModel):

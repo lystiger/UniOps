@@ -591,3 +591,86 @@ def test_cannot_link_invoice_to_cancelled_order(session, office_client):
     )
     assert response.status_code == 409
     assert "cannot link an invoice to a cancelled order" in response.json()["detail"]
+
+
+def test_invoice_without_order_respects_tracking_date_and_carries_customer_name(session):
+    _sync_invoices(
+        session,
+        _invoice("inv-old", "2026-01-15", "1000.00"),
+        _invoice("inv-on", "2026-06-01", "1500.00"),
+        _invoice("inv-new", "2026-07-01", "2000.00"),
+    )
+    # Undated document
+    doc_undated = SalesDocument(
+        source_id="inv-undated",
+        source_system="easybooks",
+        invoice_number="UNDATED1",
+        invoice_series="1C26TSH",
+        accounting_object_name="Undated Customer",
+        total_amount=Decimal("3000.00"),
+        document_date=None,
+        normalized_hash="hash-undated",
+    )
+    session.add(doc_undated)
+    session.commit()
+
+    cat = exceptions_view.ExceptionCategory.INVOICE_WITHOUT_ORDER
+    # 1. When tracking date is unset (None): all 4 documents are reported
+    rep_all = exceptions_view.report(session, order_tracking_since=None)
+    items_all = next(g.items for g in rep_all.groups if g.category == cat)
+    assert len(items_all) == 4
+
+    # 2. When tracking date is 2026-06-01:
+    # - inv-old (2026-01-15) is excluded (< 2026-06-01)
+    # - inv-on (2026-06-01) is included (== 2026-06-01)
+    # - inv-new (2026-07-01) is included (> 2026-06-01)
+    # - inv-undated (None) is included (undated documents are never silently dropped)
+    rep_filtered = exceptions_view.report(session, order_tracking_since=date(2026, 6, 1))
+    items_filtered = next(g.items for g in rep_filtered.groups if g.category == cat)
+    assert len(items_filtered) == 3
+
+    # Check structure, reference format, customer name, date, and amount
+    new_item = next(i for i in items_filtered if i.document_date == date(2026, 7, 1))
+    assert new_item.reference == "Invoice 1C26TSH/INV-NEW"
+    assert new_item.customer_name == f"Customer {CUSTOMER_CODE}"
+    assert new_item.detail == "Invoice not linked to any UniOps order"
+    assert new_item.total_amount == Decimal("2000.00")
+    assert new_item.document_date == date(2026, 7, 1)
+
+    undated_item = next(i for i in items_filtered if i.document_date is None)
+    assert undated_item.reference == "Invoice 1C26TSH/UNDATED1"
+    assert undated_item.customer_name == "Undated Customer"
+    assert undated_item.total_amount == Decimal("3000.00")
+
+
+def test_exceptions_report_defaults_as_of_to_business_today(session):
+    from app.integrations.easybooks.client import business_today
+
+    rep = exceptions_view.report(session)
+    assert rep.as_of == business_today()
+
+
+def test_exceptions_api_supports_order_tracking_since(session, office_client):
+    _sync_invoices(
+        session,
+        _invoice("inv-old2", "2026-01-15", "1000.00"),
+        _invoice("inv-new2", "2026-07-01", "2000.00"),
+    )
+
+    # Without query param: both returned
+    resp = office_client.get("/api/operations/exceptions")
+    assert resp.status_code == 200
+    group = next(g for g in resp.json()["groups"] if g["category"] == "INVOICE_WITHOUT_ORDER")
+    assert group["count"] == 2
+
+    # With query param: only 2026-07-01 returned
+    url = "/api/operations/exceptions?order_tracking_since=2026-06-01"
+    resp_filtered = office_client.get(url)
+    assert resp_filtered.status_code == 200
+    groups = resp_filtered.json()["groups"]
+    group_filtered = next(g for g in groups if g["category"] == "INVOICE_WITHOUT_ORDER")
+    assert group_filtered["count"] == 1
+    assert group_filtered["items"][0]["reference"] == "Invoice 1C26TSH/INV-NEW2"
+    assert group_filtered["items"][0]["customer_name"] == f"Customer {CUSTOMER_CODE}"
+    assert group_filtered["items"][0]["document_date"] == "2026-07-01"
+

@@ -2,18 +2,21 @@ from copy import deepcopy
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from app.config import Settings
 from app.integrations.easybooks.client import (
     PURCHASE_REPORT_PATH,
     SALES_COUNT_PATH,
     SALES_DETAIL_PATH,
     SALES_LIST_PATH,
+    EasyBooksAuthError,
     EasyBooksClient,
 )
 from app.integrations.easybooks.sync import FixtureBundle, fetch_live_bundle, sync_bundle
 from app.models import (
     Customer,
     EasyBooksRawRecord,
+    EasyBooksSyncRun,
     Product,
     PurchaseDocument,
     PurchaseLine,
@@ -576,3 +579,114 @@ def test_a_genuine_purchase_change_is_still_detected_after_sorting(session):
     run = sync_bundle(session, FixtureBundle(purchase_rows=changed))
 
     assert run.documents_updated == 1
+
+
+class _FailingLiveTransportStub(_LiveTransportStub):
+    def request(self, method, path, *, params=None, json_body=None):
+        res = super().request(method, path, params=params, json_body=json_body)
+        if isinstance(res, Exception):
+            raise res
+        return res
+
+
+def test_detail_endpoint_failure_keeps_lines_and_marks_partial(session):
+    window = (date(2026, 8, 1), date(2026, 8, 31))
+    stub1 = _live_stub()
+    bundle1 = fetch_live_bundle(_live_client(stub1), *window)
+    run1 = sync_bundle(session, bundle1, mode="live")
+    assert run1.status == SyncStatus.SUCCEEDED
+    assert _count(session, SalesLine) == 2
+
+    base_stub = _live_stub()
+    failing_doc_id = "22222222-2222-2222-2222-222222222222"
+    stub2 = _FailingLiveTransportStub(
+        base_stub.documents,
+        dict(base_stub.details),
+        base_stub.count,
+        base_stub.purchase_rows,
+    )
+    stub2.details[failing_doc_id] = RuntimeError("detail endpoint timeout")
+
+    bundle2 = fetch_live_bundle(_live_client(stub2), *window)
+    assert hasattr(bundle2, "failed_line_document_ids")
+    assert failing_doc_id in bundle2.failed_line_document_ids
+
+    run2 = sync_bundle(session, bundle2, mode="live")
+    assert run2.status == SyncStatus.PARTIAL
+    assert run2.documents_failed == 1
+    assert run2.error_summary is not None
+    assert failing_doc_id in run2.error_summary
+    assert "detail endpoint timeout" in run2.error_summary
+
+    doc2 = session.scalar(select(SalesDocument).where(SalesDocument.source_id == failing_doc_id))
+    assert len(doc2.lines) == 1
+    assert _count(session, SalesLine) == 2
+
+    empty_lines_raw = [
+        record
+        for record in session.scalars(
+            select(EasyBooksRawRecord).where(
+                EasyBooksRawRecord.entity_type == "sales_lines",
+                EasyBooksRawRecord.source_id == failing_doc_id,
+            )
+        ).all()
+        if record.payload == []
+    ]
+    assert len(empty_lines_raw) == 0
+
+
+def test_detail_endpoint_auth_rejection_propagates(session):
+    window = (date(2026, 8, 1), date(2026, 8, 31))
+    base_stub = _live_stub()
+    stub = _FailingLiveTransportStub(
+        base_stub.documents,
+        dict(base_stub.details),
+        base_stub.count,
+        base_stub.purchase_rows,
+    )
+    stub.details["11111111-1111-1111-1111-111111111111"] = EasyBooksAuthError("invalid token")
+
+    with pytest.raises(EasyBooksAuthError):
+        fetch_live_bundle(_live_client(stub), *window)
+
+
+def test_idempotent_after_failed_detail_run(session):
+    window = (date(2026, 8, 1), date(2026, 8, 31))
+    run1 = sync_bundle(session, fetch_live_bundle(_live_client(_live_stub()), *window), mode="live")
+    assert run1.status == SyncStatus.SUCCEEDED
+
+    base_stub = _live_stub()
+    stub2 = _FailingLiveTransportStub(
+        base_stub.documents,
+        dict(base_stub.details),
+        base_stub.count,
+        base_stub.purchase_rows,
+    )
+    stub2.details["22222222-2222-2222-2222-222222222222"] = RuntimeError("timeout")
+    run2 = sync_bundle(session, fetch_live_bundle(_live_client(stub2), *window), mode="live")
+    assert run2.status == SyncStatus.PARTIAL
+
+    stub3 = _live_stub()
+    run3 = sync_bundle(session, fetch_live_bundle(_live_client(stub3), *window), mode="live")
+    assert run3.status == SyncStatus.SUCCEEDED
+    assert run3.documents_failed == 0
+    assert _count(session, SalesLine) == 2
+
+
+def test_fatal_database_error_leaves_run_failed_not_running(session, fixture_bundle, monkeypatch):
+    import app.integrations.easybooks.sync as sync_mod
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("database crash mid-sync")
+
+    monkeypatch.setattr(sync_mod, "check_integrity", boom)
+
+    with pytest.raises(RuntimeError, match="database crash mid-sync"):
+        sync_bundle(session, fixture_bundle)
+
+    run = session.scalar(select(EasyBooksSyncRun).order_by(EasyBooksSyncRun.started_at.desc()))
+    assert run is not None
+    assert run.status == SyncStatus.FAILED
+    assert run.finished_at is not None
+    assert "Fatal sync error" in (run.error_summary or "")
+

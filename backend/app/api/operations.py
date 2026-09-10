@@ -21,9 +21,14 @@ router = APIRouter(prefix="/operations", tags=["operations"], dependencies=[read
 async def exceptions(
     as_of: date | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500, description="Rows listed per category"),
+    order_tracking_since: date | None = Query(
+        default=None, description="Filter unlinked invoices by document date"
+    ),
     session: Session = Depends(get_db),
 ):
-    report = exceptions_view.report(session, as_of=as_of, limit=limit)
+    report = exceptions_view.report(
+        session, as_of=as_of, limit=limit, order_tracking_since=order_tracking_since
+    )
     return ExceptionReportRead(
         as_of=report.as_of,
         total=report.total,

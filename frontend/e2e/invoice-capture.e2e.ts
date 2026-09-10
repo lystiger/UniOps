@@ -94,7 +94,7 @@ test("the panel offers the fixture invoice, and only that one", async ({ page })
   const rows = candidateRow(page, panel);
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText(facts().invoice_number);
-  await expect(rows).toContainText(facts().invoice_date);
+  await expect(rows).toContainText(facts().invoice_date.split("-").reverse().join("/"));
   await expect(rows).toContainText(money(facts().invoice_total));
   await expect(rows).toContainText(`confidence ${facts().candidate_confidence}`);
 });

@@ -25,6 +25,41 @@ See also:
 
 PostgreSQL 17 is the normal integrated development target and the production baseline. SQLite remains supported for fast unit tests and isolated local checks.
 
+## Local development on PostgreSQL
+
+The integrated local development workflow runs against PostgreSQL:
+
+```bash
+docker compose up -d db
+export UNIOPS_DATABASE_URL="postgresql+psycopg://uniops:$UNIOPS_DB_PASSWORD@127.0.0.1:5432/uniops"
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload
+cd frontend && npm run dev
+```
+
+*Prerequisites*:
+- Docker running on the host machine.
+- `UNIOPS_DB_PASSWORD` can be sourced from `.env`: `export UNIOPS_DB_PASSWORD="$(grep '^UNIOPS_DB_PASSWORD=' .env | cut -d= -f2-)"`.
+- Working directory is repository root for the first four commands; `frontend` directory for `npm run dev`.
+- `app.main:app` is resolved because `uv sync` installs `backend/app` as an editable package.
+
+## Test database safety
+
+- **SQLite is the default** for `uv run pytest`, providing fast and isolated local unit testing without touching PostgreSQL.
+- **PostgreSQL tests** execute when `UNIOPS_TEST_DATABASE_URL` is set, pointing at a dedicated test database (e.g., `uniops_test`):
+  ```bash
+  make db-test-init
+  make test-pg
+  ```
+- **Why the guard exists**: Test execution invokes `Base.metadata.drop_all(engine)` during session setup. Running tests against a database holding real or operational data would destroy all tables and records.
+- **Automated guard behavior**: The function `validate_test_database_url` in `backend/tests/conftest.py` inspects the configured URLs before any tests run. It strictly refuses:
+  1. `UNIOPS_TEST_DATABASE_URL` pointing to the same host, port, and database name as `UNIOPS_DATABASE_URL`.
+  2. Any database named `uniops`, `postgres`, `production`, or `prod`.
+  3. Any PostgreSQL database name that does not contain `test` (case-insensitive).
+- **Managing `uniops_test`**:
+  - `make db-test-init`: Creates `uniops_test` inside the Postgres container if not already present. It fails loudly if the database container is down. Run this before running `make test-pg`.
+  - `make db-test-reset`: Drops and recreates `uniops_test` to recover from corrupt schema states.
+
 ## Accounts and roles
 
 There are three roles and no self-registration. Accounts exist only where an
@@ -224,7 +259,13 @@ Also back up, separately and by hand, because no script here covers them:
 ### The restore drill
 
 A backup nobody has restored is a guess. Once a month, restore the newest dump
-into a scratch database and check that it holds what it should:
+into a scratch database and check that it holds what it should.
+
+**Prerequisites:**
+- PostgreSQL service running (e.g. `docker compose up -d db`).
+- `UNIOPS_DB_PASSWORD` set in environment or loaded from `.env`.
+
+**Option A — Using native host client tools (`createdb`, `psql`, `dropdb`):**
 
 ```bash
 createdb -h 127.0.0.1 -U uniops uniops_restore_test
@@ -234,6 +275,20 @@ scripts/restore.sh /var/backups/uniops/uniops-20260909T023000Z.dump \
 psql "postgresql://uniops:$UNIOPS_DB_PASSWORD@127.0.0.1:5432/uniops_restore_test" \
   -c 'SELECT count(*), max(document_date) FROM sales_documents'
 dropdb -h 127.0.0.1 -U uniops uniops_restore_test
+```
+
+**Option B — Using Docker Compose (no host Postgres client tools required):**
+
+```bash
+docker compose exec -T db psql -U uniops -d postgres -c "CREATE DATABASE uniops_restore_test;"
+
+scripts/restore.sh backups/uniops-20260910T090225Z.dump \
+  "postgresql://uniops:$UNIOPS_DB_PASSWORD@127.0.0.1:5432/uniops_restore_test"
+
+docker compose exec -T db psql -U uniops -d uniops_restore_test \
+  -c "SELECT count(*), max(document_date) FROM sales_documents;"
+
+docker compose exec -T db psql -U uniops -d postgres -c "DROP DATABASE uniops_restore_test;"
 ```
 
 `restore.sh` verifies the checksum and refuses a target that already holds
@@ -253,3 +308,19 @@ tables, so it can never be pointed at production by accident.
 
 Recovery loses UniOps orders entered since the last dump, because those exist
 nowhere else. Sales and purchase data can always be re-read from EasyBooks.
+
+## Known Operational Limitations & Observability
+
+- **Operational `INVOICED` Status Independence**: Operators can manually advance an order to `INVOICED` on the Order Board even if no EasyBooks invoice is linked. This is an operational workflow flag, not a confirmed accounting fact. Linking/unlinking invoices operates independently via the accounting drawer.
+- **Reconciliation Warnings Observability**: Sync-run reconciliation warnings and normalization discrepancies appear as aggregate counts on the Data page ("Warnings" column). Full per-record warning details are logged to server logs. The Overview page displays operational exceptions (unlinked invoices, ambiguous candidates, customer mismatches).
+- **Data Page is Read-Only**: The Data page displays synchronization run history (`GET /api/sync-runs`). There is no web-based manual sync trigger button; sync runs are executed via scheduled cron, background processes, or CLI (`uv run uniops sync-easybooks`).
+- **No User Management API**: User accounts are administered strictly from the CLI (`uv run uniops user`). The API exposes only `GET /api/users` (for `ADMIN` role) to list account statuses.
+
+## Operational Configuration: Order Tracking Start Date
+
+- **Setting**: `UNIOPS_ORDER_TRACKING_SINCE` (ISO date `YYYY-MM-DD`, optional in `.env`).
+- **Purpose**: When an organization transitions to UniOps, historical invoices synced from EasyBooks that predate UniOps adoption would otherwise all appear as `INVOICE_WITHOUT_ORDER` ("Needs attention"), cluttering the operational view.
+- **Behavior**:
+  - When **set** (e.g. `UNIOPS_ORDER_TRACKING_SINCE=2026-06-01`), only sales documents with `document_date >= that date` appear in the unlinked invoice exception list. Documents with no date (`None`) are always reported to avoid silent omission.
+  - When **unset**, all unlinked sales documents are reported (useful for full historical back-audit).
+- **Owner decision**: The business owner decides the official operational cutover date from which unlinked invoices represent actionable exceptions.

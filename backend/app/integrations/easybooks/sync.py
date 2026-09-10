@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import Any
@@ -8,7 +9,11 @@ from typing import Any
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
-from app.integrations.easybooks.client import EasyBooksClient
+from app.integrations.easybooks.client import (
+    EasyBooksAuthError,
+    EasyBooksClient,
+    EasyBooksConfigurationError,
+)
 from app.integrations.easybooks.contracts import (
     CatalogItem,
     PurchaseLineRecord,
@@ -43,6 +48,16 @@ from app.models import (
 
 logger = logging.getLogger(__name__)
 
+_SECRET_PATTERN = re.compile(
+    r"(?:Bearer\s+[A-Za-z0-9_\-\.]+)|(?:[a-zA-Z0-9_\-]+(?:token|password|cookie|secret)=[^\s&]+)",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_error(msg: str) -> str:
+    """Strip tokens, cookies, or secrets from error messages before storing."""
+    return _SECRET_PATTERN.sub("[REDACTED]", msg)
+
 
 @dataclass
 class FixtureBundle:
@@ -55,6 +70,8 @@ class FixtureBundle:
     # Retrieval-time findings, such as a sales count that disagrees with the
     # number of listed documents. Counted as sync-run reconciliation warnings.
     warnings: list[str] = field(default_factory=list)
+    failed_line_document_ids: set[str] = field(default_factory=set)
+    failed_line_reasons: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> FixtureBundle:
@@ -69,7 +86,15 @@ class FixtureBundle:
             raise ValueError(
                 "fixture requires sales_documents list, sales_lines object, and purchase_rows list"
             )
-        return cls(documents, lines, purchases)
+        failed_ids = set(payload.get("failed_line_document_ids", []))
+        failed_reasons = dict(payload.get("failed_line_reasons", {}))
+        return cls(
+            documents,
+            lines,
+            purchases,
+            failed_line_document_ids=failed_ids,
+            failed_line_reasons=failed_reasons,
+        )
 
 
 # The sales list is an observed plain JSON array. These envelope keys exist only
@@ -158,22 +183,32 @@ def fetch_live_bundle(
     """
     documents, warnings = fetch_sales_documents(client, from_date, to_date)
     sales_lines: dict[str, list[dict[str, Any]]] = {}
+    failed_line_document_ids: set[str] = set()
+    failed_line_reasons: dict[str, str] = {}
     if include_lines:
         for document in documents:
             doc_id = str(document.get("id", ""))
             try:
                 sales_lines[doc_id] = _extract_rows(client.sales_lines(doc_id))
+            except (EasyBooksAuthError, EasyBooksConfigurationError):
+                raise
             except Exception as exc:
-                warnings.append(f"sales detail unavailable for document {doc_id}: {exc}")
+                failed_line_document_ids.add(doc_id)
+                clean_err = _sanitize_error(str(exc))
+                failed_line_reasons[doc_id] = clean_err
+                warnings.append(f"sales detail unavailable for document {doc_id}: {clean_err}")
     else:
         warnings.append("sales details were not retrieved; existing normalized lines are kept")
     try:
         purchase_rows = _extract_rows(client.purchase_report(from_date, to_date))
+    except (EasyBooksAuthError, EasyBooksConfigurationError):
+        raise
     except Exception as exc:
         # The purchase dynamic-report request body has never been directly observed
         # and the endpoint rejects the current one. A broken purchase read must not
         # discard a healthy sales read, so it degrades to a warning.
-        warnings.append(f"purchase report unavailable: {exc}")
+        clean_err = _sanitize_error(str(exc))
+        warnings.append(f"purchase report unavailable: {clean_err}")
         purchase_rows = []
     return FixtureBundle(
         documents,
@@ -181,6 +216,8 @@ def fetch_live_bundle(
         purchase_rows,
         sales_lines_available=include_lines,
         warnings=warnings,
+        failed_line_document_ids=failed_line_document_ids,
+        failed_line_reasons=failed_line_reasons,
     )
 
 
@@ -441,30 +478,39 @@ def sync_bundle(
     run = EasyBooksSyncRun(mode=mode, from_date=from_date, to_date=to_date)
     session.add(run)
     session.commit()
+    run_id = run.id
     logger.info(
         "EasyBooks sync started",
-        extra={"sync_run_id": run.id, "source": "easybooks", "mode": mode},
+        extra={"sync_run_id": run_id, "source": "easybooks", "mode": mode},
     )
 
-    for warning in bundle.warnings:
-        run.reconciliation_warnings += 1
-        logger.warning(
-            warning,
-            extra={"sync_run_id": run.id, "source": "easybooks", "entity_type": "sales_retrieval"},
-        )
-
-    # The purchase report's grand-total footer is not a document. Dropping it is
-    # reported rather than silent, so a change in the report's shape is visible.
-    skipped_totals = len(report_total_rows(bundle.purchase_rows))
-    if skipped_totals:
-        run.reconciliation_warnings += skipped_totals
-        logger.warning(
-            f"{skipped_totals} purchase report total rows were not ingested as documents",
-            extra={"sync_run_id": run.id, "source": "easybooks", "entity_type": "purchase_report"},
-        )
-
-    errors: list[str] = []
     try:
+        for warning in bundle.warnings:
+            run.reconciliation_warnings += 1
+            logger.warning(
+                warning,
+                extra={
+                    "sync_run_id": run.id,
+                    "source": "easybooks",
+                    "entity_type": "sales_retrieval",
+                },
+            )
+
+        # The purchase report's grand-total footer is not a document. Dropping it is
+        # reported rather than silent, so a change in the report's shape is visible.
+        skipped_totals = len(report_total_rows(bundle.purchase_rows))
+        if skipped_totals:
+            run.reconciliation_warnings += skipped_totals
+            logger.warning(
+                f"{skipped_totals} purchase report total rows were not ingested as documents",
+                extra={
+                    "sync_run_id": run.id,
+                    "source": "easybooks",
+                    "entity_type": "purchase_report",
+                },
+            )
+
+        errors: list[str] = []
         grouped_purchases = group_purchase_rows(bundle.purchase_rows)
         work: list[tuple[str, Any]] = [("sales", source) for source in bundle.sales_documents] + [
             ("purchase", (source_id, rows)) for source_id, rows in grouped_purchases.items()
@@ -475,14 +521,23 @@ def sync_bundle(
                 with session.begin_nested():
                     if entity_type == "sales":
                         source_id = str(item.get("id", "missing"))
+                        line_fetch_failed = source_id in bundle.failed_line_document_ids
+                        lines_available = bundle.sales_lines_available and not line_fetch_failed
                         outcome, warning_count = _upsert_sales(
                             session,
                             run,
                             item,
                             bundle.sales_lines.get(source_id, []),
-                            lines_available=bundle.sales_lines_available,
+                            lines_available=lines_available,
                         )
                         run.reconciliation_warnings += warning_count
+                        if line_fetch_failed:
+                            run.documents_failed += 1
+                            reason = (
+                                bundle.failed_line_reasons.get(source_id)
+                                or "sales detail unavailable"
+                            )
+                            errors.append(f"sales detail {source_id}: {_sanitize_error(reason)}")
                     else:
                         source_id, rows = item
                         outcome = _upsert_purchase(session, run, source_id, rows)
@@ -502,7 +557,7 @@ def sync_bundle(
                         "source_id": source_id,
                     },
                 )
-                errors.append(f"{entity_type} {source_id}: {exc}")
+                errors.append(f"{entity_type} {source_id}: {_sanitize_error(str(exc))}")
 
         # Validate/reconcile: what was just published must hold together, whatever
         # the source said. Breaks are reported, never silently accepted.
@@ -512,34 +567,39 @@ def sync_bundle(
                 warning,
                 extra={"sync_run_id": run.id, "source": "easybooks", "entity_type": "integrity"},
             )
-    except Exception as fatal_exc:
+
+        if errors:
+            run.error_summary = "; ".join(errors)[:2000]
+
         run.finished_at = utc_now()
-        run.status = SyncStatus.FAILED
-        run.error_summary = f"Fatal sync error: {fatal_exc}"[:2000]
+        if run.documents_failed > 0 and (
+            run.documents_created + run.documents_updated + run.documents_unchanged == 0
+        ):
+            run.status = SyncStatus.FAILED
+        elif run.documents_failed > 0:
+            run.status = SyncStatus.PARTIAL
+        else:
+            run.status = SyncStatus.SUCCEEDED
         session.commit()
+        logger.info(
+            "EasyBooks sync finished",
+            extra={
+                "sync_run_id": run.id,
+                "source": "easybooks",
+                "mode": mode,
+                "documents_seen": run.documents_seen,
+                "documents_failed": run.documents_failed,
+            },
+        )
+        return run
+
+    except Exception as fatal_exc:
+        session.rollback()
+        failed_run = session.get(EasyBooksSyncRun, run_id)
+        if failed_run is not None:
+            failed_run.finished_at = utc_now()
+            failed_run.status = SyncStatus.FAILED
+            cleaned_err = _sanitize_error(str(fatal_exc))
+            failed_run.error_summary = f"Fatal sync error: {cleaned_err}"[:2000]
+            session.commit()
         raise
-
-    if errors:
-        run.error_summary = "; ".join(errors)[:2000]
-
-    run.finished_at = utc_now()
-    if run.documents_failed > 0 and (
-        run.documents_created + run.documents_updated + run.documents_unchanged == 0
-    ):
-        run.status = SyncStatus.FAILED
-    elif run.documents_failed > 0:
-        run.status = SyncStatus.PARTIAL
-    else:
-        run.status = SyncStatus.SUCCEEDED
-    session.commit()
-    logger.info(
-        "EasyBooks sync finished",
-        extra={
-            "sync_run_id": run.id,
-            "source": "easybooks",
-            "mode": mode,
-            "documents_seen": run.documents_seen,
-            "documents_failed": run.documents_failed,
-        },
-    )
-    return run

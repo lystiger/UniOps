@@ -116,38 +116,52 @@ The repository is a small monorepo:
 - `docs/operations.md`: accounts, PostgreSQL deployment, and backups;
 - `docs/easybooks-integration.md`: source-specific contract and live setup boundary.
 
-PostgreSQL is the deployment target. SQLite remains the default for local development and for the test suite, and the same suite runs against PostgreSQL with `make test-pg`, so portability is a checked claim rather than an assumption. API handlers are async entry points around short synchronous database operations; this is intentionally simple for current load and should be revisited before high concurrency.
+PostgreSQL 17 is the integrated-development baseline and production deployment target. SQLite remains supported for fast unit tests and isolated local checks. The same test suite runs against PostgreSQL with `make test-pg`, so portability is a checked claim rather than an assumption. API handlers are async entry points around short synchronous database operations; this is intentionally simple for current load and should be revisited before high concurrency.
 
-## Local development
+## Local development on PostgreSQL
 
-Requirements:
+To run the application locally against the PostgreSQL baseline:
 
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/)
-- Node.js 22+ and npm
+1. Obtain or set the database password (can be read from `.env`):
+   ```bash
+   export UNIOPS_DB_PASSWORD="$(grep '^UNIOPS_DB_PASSWORD=' .env 2>/dev/null | cut -d= -f2-)"
+   ```
 
-Install and migrate from the repository root:
+2. Start the database, run migrations, and start services in this exact order:
+   ```bash
+   docker compose up -d db
+   export UNIOPS_DATABASE_URL="postgresql+psycopg://uniops:$UNIOPS_DB_PASSWORD@127.0.0.1:5432/uniops"
+   uv run alembic upgrade head
+   uv run uvicorn app.main:app --reload
+   cd frontend && npm run dev
+   ```
+
+*Note*: The uvicorn app path `app.main:app` resolves because `uv sync` installs `backend/app` as an editable package. The Vite development server on port 5173 proxies `/api` to `http://127.0.0.1:8000`.
+
+## Test database safety
+
+- **SQLite is the default** for `uv run pytest`, executing fast local tests without touching PostgreSQL.
+- **PostgreSQL tests** use `UNIOPS_TEST_DATABASE_URL` pointing at a dedicated test database (e.g. `uniops_test`):
+  ```bash
+  make db-test-init
+  make test-pg
+  ```
+- **Why the guard exists**: Test execution invokes `Base.metadata.drop_all(engine)` during session setup. Running tests against a database holding real or operational data would destroy all tables and records.
+- **Automated guard behavior**: The function `validate_test_database_url` in `backend/tests/conftest.py` strictly prevents running tests if:
+  1. `UNIOPS_TEST_DATABASE_URL` matches the host, port, and database name of `UNIOPS_DATABASE_URL`.
+  2. The test database is named `uniops`, `postgres`, `production`, or `prod`.
+  3. Any PostgreSQL database name lacks `test` (case-insensitive).
+- **Managing `uniops_test`**:
+  - `make db-test-init`: Creates `uniops_test` inside the Postgres container if not already present. Must be run before executing `make test-pg`. Fails loudly if the database container is down.
+  - `make db-test-reset`: Safely drops and recreates `uniops_test` to recover from dirty test states.
+
+## Accounts and quickstart
+
+Install dependencies and run frontend:
 
 ```bash
 uv sync --all-groups
-uv run alembic upgrade head
 cd frontend && npm install
-```
-
-`uv sync` installs `backend/app` as the editable `uniops` package, so `app.*` imports and the
-`uniops` console script work from the repository root without extra `PYTHONPATH` handling.
-
-Start the API:
-
-```bash
-uv run uvicorn app.main:app --reload
-```
-
-Start the frontend in another terminal:
-
-```bash
-cd frontend
-npm run dev
 ```
 
 Create an account before the first sign-in, because there is no default one:
@@ -156,19 +170,7 @@ Create an account before the first sign-in, because there is no default one:
 uv run uniops user create --username you --role admin
 ```
 
-Open `http://localhost:5173`. The Vite development server proxies `/api` to `http://127.0.0.1:8000`, so the session cookie is same-origin in development too. API documentation is available at `http://127.0.0.1:8000/docs`.
-
-## Database and configuration
-
-Copy `.env.example` to `.env` and change only values needed locally. `.env` is ignored by Git.
-
-The default database is `sqlite:///./uniops.db`, which is the development and test default. The deployment target is PostgreSQL:
-
-```bash
-UNIOPS_DATABASE_URL=postgresql+psycopg://uniops:PASSWORD@127.0.0.1:5432/uniops
-```
-
-`docker compose up -d db` starts one bound to loopback. Moving an existing SQLite database across, backups, and accounts are all in [Operations](docs/operations.md).
+Open `http://localhost:5173`. API documentation is available at `http://127.0.0.1:8000/docs`. See [Operations](docs/operations.md) for full deployment and runbook details.
 
 Build the schema or bring it to the current revision with:
 
@@ -315,6 +317,7 @@ Run the backend suite against the deployment database as well. It catches what S
 
 ```bash
 docker compose up -d db
+make db-test-init
 make test-pg
 ```
 
@@ -326,6 +329,10 @@ make test-pg
 - EasyBooks returns an empty result rather than an error for several misconfigurations - a missing `group`, an inverted date window, an empty `listMaterialGoods`. Where UniOps can detect these it refuses instead of reporting zero rows.
 - Live ingestion has been run against the company account and is verified across full years 2024-2026 and a year boundary, with counts reconciling exactly. Only sales and purchases are ingested; no other EasyBooks entity is read.
 - The purchase report ends with a grand-total footer row that carries no document identity. It was previously ingested as a purchase document and doubled all-time purchase totals; it is now recognised, skipped, and counted as a reconciliation warning.
+- **Operational `INVOICED` status independence**: The Order Board allows advancing an order to `INVOICED` manually without requiring a linked EasyBooks invoice. This acts as an internal operational progress indicator; invoice linking and reconciliation are tracked independently.
+- **Reconciliation warnings and observability**: Sync-run reconciliation warnings and normalization discrepancies appear as aggregate counts on the Data page ("Warnings" column); detailed logs are emitted to server logs. The Overview page displays operational exceptions (unlinked invoices, candidate ambiguities). The Data page is read-only (`GET /api/sync-runs`); sync runs are initiated via CLI or scheduled background jobs.
+- **Operational order tracking cutover (`UNIOPS_ORDER_TRACKING_SINCE`)**: Historical unlinked EasyBooks invoices can be filtered on the Overview page by setting `UNIOPS_ORDER_TRACKING_SINCE=YYYY-MM-DD`. When unset, all unlinked invoices are reported. Undated documents are always reported.
+- **No user management API**: User accounts are created, modified, and disabled strictly from the CLI (`uv run uniops user`). The API exposes only `GET /api/users` for administrators to view account listings.
 - Purchase VAT comes from `thueGTGT`, which is a VAT **amount** in dong rather than a rate. Every observed line divides out to 0.08 of its purchase amount, but no VAT rate is inferred or stored from that.
 - Synchronous database operations target the present small-team load, not high concurrency.
 - **Sign-in has no rate limit or lockout.** Argon2id makes each attempt cost real time and an unknown username costs the same as a known one, but a determined attacker with network access can keep guessing. This is sized for three accounts on an internal network.

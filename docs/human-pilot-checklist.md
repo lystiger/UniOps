@@ -66,18 +66,28 @@ uv run uniops user create --username factory_lead --role factory-read --full-nam
 5. Click **Mark ready** → order moves to *Ready* column.
 6. Click **Send to delivery** → order moves to *Delivery / delivered* column.
 7. Click **Mark delivered** → order status becomes **Delivered**.
+8. Optional operational stages:
+   - Click **Mark invoiced** → order status becomes **Invoiced** (note: operational status; does not require an EasyBooks invoice link).
+   - Click **Close order** → order status becomes **Closed** (archived from board).
 
 ### Step 6: Order Cancellation Flow (`office` or `admin`)
 1. Create a draft test order.
 2. On the order card, click **Cancel order**.
-3. Accept the confirmation prompt.
+3. Accept the confirmation prompt:
    - *Expected*: Order is moved to `CANCELLED` and safely removed from the active operational board.
-   - *Backend verification*: API returns 422 if attempting to patch lines or link invoices to this cancelled order.
+   - *Backend verification*:
+     - Attempting to update or edit lines on a cancelled order returns HTTP 422 Unprocessable Content.
+     - Attempting to link an invoice to a cancelled order returns HTTP 409 Conflict.
+     - Attempting to cancel an order that already has an invoice link returns HTTP 409 Conflict ("cannot cancel an order with linked invoices; unlink all invoices first"), surfaced in the board error banner.
 
 ### Step 7: Inspect Operational Exceptions ("Needs Attention")
 1. Click **Overview** in the primary navigation.
 2. Locate the **Needs attention** section.
-3. Verify any unlinked delivered orders or unlinked invoices appear with contextual reasons (e.g. "invoice dated ... is not linked to any UniOps order").
+3. Observe the breakdown between **Order exceptions** (delivered orders missing invoices, candidate ambiguities, customer/amount mismatches) and **Invoice backlog & data issues** (EasyBooks invoices not linked to UniOps orders, invoices missing customer code).
+4. Verify the **Reference** column displays specific references (e.g. `Invoice 1C26TSH/105` or `UO-20260910-XXXX`), and the **Customer** column shows the customer name.
+5. Invoices show vi-VN formatted date (`DD/MM/YYYY`) and VND amount; order rows show status and required date.
+6. Verify pagination indicator (e.g., "Showing 10 of 111") and test the **View all** / **Show 10** toggle.
+7. Note for Administrator / Owner: Historical unlinked invoices preceding UniOps adoption can be filtered by setting `UNIOPS_ORDER_TRACKING_SINCE=YYYY-MM-DD` in `.env`.
 
 ### Step 8: Accounting Link & Candidate Matching
 1. Return to **Orders** or open an order card's **Accounting** button (status badge: *Invoice candidate* or *Not invoiced*).

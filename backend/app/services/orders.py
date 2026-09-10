@@ -18,6 +18,10 @@ class OrderValidationError(ValueError):
     pass
 
 
+class OrderConflictError(Exception):
+    pass
+
+
 ALLOWED_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
     OrderStatus.DRAFT: {OrderStatus.CONFIRMED, OrderStatus.CANCELLED},
     OrderStatus.CONFIRMED: {OrderStatus.SCHEDULED, OrderStatus.CANCELLED},
@@ -39,6 +43,7 @@ def _order_query():
         .options(
             selectinload(Order.customer),
             selectinload(Order.lines).selectinload(OrderLine.product),
+            selectinload(Order.accounting_links),
         )
     )
 
@@ -153,6 +158,10 @@ def change_status(session: Session, order_id: str, target: OrderStatus) -> Order
     if target not in ALLOWED_TRANSITIONS[order.status]:
         raise OrderValidationError(
             f"cannot change status from {order.status.value} to {target.value}"
+        )
+    if target == OrderStatus.CANCELLED and order.accounting_links:
+        raise OrderConflictError(
+            "cannot cancel an order with linked invoices; unlink all invoices first"
         )
     order.status = target
     session.commit()

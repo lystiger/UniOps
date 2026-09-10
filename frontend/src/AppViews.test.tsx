@@ -290,3 +290,95 @@ describe("DataView", () => {
     expect(await screen.findByText("No EasyBooks synchronization has run yet.")).toBeInTheDocument();
   });
 });
+
+describe("OverviewView Needs attention", () => {
+  it("separates order and invoice issues, shows Reference and customer, formats dates as vi-VN, and shows pagination note", async () => {
+    const mockExceptions = {
+      as_of: "2026-09-10",
+      total: 12,
+      groups: [
+        {
+          category: "DELIVERED_ORDER_NOT_INVOICED",
+          count: 1,
+          items: [
+            {
+              category: "DELIVERED_ORDER_NOT_INVOICED",
+              reference: "SO-20260909-001",
+              detail: "DELIVERED order has no linked invoice",
+              customer_name: "UniPackaging Corp",
+              document_date: "2026-09-15",
+              total_amount: "5000000.00",
+              order_id: "ord-1",
+              sales_document_id: null,
+            },
+          ],
+        },
+        {
+          category: "INVOICE_WITHOUT_ORDER",
+          count: 11,
+          items: [
+            {
+              category: "INVOICE_WITHOUT_ORDER",
+              reference: "Invoice 1C26TSH/105",
+              detail: "Invoice not linked to any UniOps order",
+              customer_name: "CÔNG TY TNHH ABC",
+              document_date: "2026-06-30",
+              total_amount: "7210620.00",
+              order_id: null,
+              sales_document_id: "doc-105",
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/orders")) {
+        return new Response(JSON.stringify({ items: orders, total: orders.length }), { status: 200 });
+      }
+      if (url.includes("/api/operations/exceptions")) {
+        return new Response(JSON.stringify(mockExceptions), { status: 200 });
+      }
+      if (url.includes("/api/analytics/overview")) {
+        return new Response(JSON.stringify(commercialOverview), { status: 200 });
+      }
+      if (url.includes("/api/analytics/receivables")) {
+        return new Response(JSON.stringify(receivablesSummary), { status: 200 });
+      }
+      if (url.includes("/api/sync-runs")) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response("{}", { status: 404 });
+    });
+
+    render(
+      <OverviewView
+        onNavigateOrders={() => undefined}
+        onNewOrder={() => undefined}
+        canWrite={true}
+        onSessionLost={() => undefined}
+      />,
+    );
+
+    // Section count says what it counts
+    expect(await screen.findByText("1 order · 11 invoice issues")).toBeInTheDocument();
+
+    // Visibly separate headings
+    expect(screen.getByText("Order exceptions (1)")).toBeInTheDocument();
+    expect(screen.getByText("Invoice backlog & data issues (11)")).toBeInTheDocument();
+
+    // Invoice renders as invoice reference, not as an order
+    expect(screen.getByText("Invoice 1C26TSH/105")).toBeInTheDocument();
+    // Customer column is filled
+    expect(screen.getByText("CÔNG TY TNHH ABC")).toBeInTheDocument();
+
+    // Date formatted as DD/MM/YYYY (30/06/2026) and NO raw ISO date (2026-06-30) in table
+    expect(screen.getByText("30/06/2026")).toBeInTheDocument();
+    expect(screen.queryByText("2026-06-30")).not.toBeInTheDocument();
+
+    // Truncation note "Showing 1 of 11" appears
+    expect(screen.getByText("Showing 1 of 11")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View all (11)" })).toBeInTheDocument();
+  });
+});

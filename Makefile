@@ -26,7 +26,7 @@ test-e2e:
 
 # The same suite against the deployment database. Needs `make db-up` and `make db-test-init` first.
 test-pg:
-	UNIOPS_TEST_DATABASE_URL=postgresql+psycopg://uniops:$(UNIOPS_DB_PASSWORD)@127.0.0.1:5432/uniops_test \
+	@UNIOPS_TEST_DATABASE_URL=postgresql+psycopg://uniops:$(UNIOPS_DB_PASSWORD)@127.0.0.1:5432/uniops_test \
 		uv run pytest
 
 lint:
@@ -53,7 +53,7 @@ db-down:
 	docker compose down
 
 db-test-init:
-	docker compose exec -T db psql -U uniops -d postgres -c "CREATE DATABASE uniops_test;" 2>/dev/null || true
+	@docker compose exec -T db bash -c "psql -U uniops -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='uniops_test'\" | grep -q 1 || psql -U uniops -d postgres -c \"CREATE DATABASE uniops_test;\""
 
 db-test-reset:
 	docker compose exec -T db psql -U uniops -d postgres -c "DROP DATABASE IF EXISTS uniops_test;"

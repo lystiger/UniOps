@@ -26,6 +26,8 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 def _translate_error(exc: Exception) -> HTTPException:
     if isinstance(exc, orders.OrderNotFound):
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    if isinstance(exc, orders.OrderConflictError):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc))
 
 
@@ -90,7 +92,7 @@ async def change_status(
 ):
     try:
         return orders.change_status(session, order_id, data.status)
-    except (orders.OrderNotFound, orders.OrderValidationError) as exc:
+    except (orders.OrderNotFound, orders.OrderValidationError, orders.OrderConflictError) as exc:
         raise _translate_error(exc) from exc
 
 

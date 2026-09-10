@@ -126,3 +126,44 @@ def test_cannot_update_closed_or_cancelled_order(client):
     cannot_update = client.patch(f"/api/orders/{order['id']}", json={"notes": "Illegal edit"})
     assert cannot_update.status_code == 422
     assert "cannot update a CANCELLED order" in cannot_update.json()["detail"]
+
+
+def test_cannot_cancel_order_with_linked_invoices_api(client, session):
+    from datetime import date
+    from decimal import Decimal
+
+    from app.models import SalesDocument
+
+    customer, product = _catalog(client)
+    order = client.post("/api/orders", json=_order_payload(customer["id"], product["id"])).json()
+
+    doc = SalesDocument(
+        source_id="INV-API-TEST",
+        document_date=date(2026, 8, 2),
+        source_type="SA_INVOICE",
+        invoice_number="INV-API-01",
+        invoice_series="1C26TSH",
+        accounting_object_code="KH-TEST",
+        accounting_object_name="Test Customer",
+        subtotal=Decimal("10000.00"),
+        vat_amount=Decimal("1000.00"),
+        total_amount=Decimal("11000.00"),
+        currency_id="VND",
+        normalized_hash="hash_api_test",
+    )
+    session.add(doc)
+    session.commit()
+
+    link_res = client.post(
+        f"/api/orders/{order['id']}/invoice-links",
+        json={"sales_document_id": doc.id},
+    )
+    assert link_res.status_code == 201
+
+    cancel_res = client.post(
+        f"/api/orders/{order['id']}/status",
+        json={"status": "CANCELLED"},
+    )
+    assert cancel_res.status_code == 409
+    assert "cannot cancel an order with linked invoices" in cancel_res.json()["detail"]
+

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { api } from "../api";
 import { isoDate, money, today } from "../format";
 import { useApiResource } from "../hooks";
@@ -14,7 +14,19 @@ import {
   SyncStatus,
 } from "./primitives";
 import { StatusBadge } from "./StatusBadge";
-import type { ExceptionItem, Order } from "../types";
+import type { ExceptionCategory, ExceptionItem, Order } from "../types";
+
+const ORDER_CATEGORIES: Set<ExceptionCategory> = new Set([
+  "DELIVERED_ORDER_NOT_INVOICED",
+  "AMBIGUOUS_INVOICE_CANDIDATES",
+  "LINKED_CUSTOMER_MISMATCH",
+  "LINKED_AMOUNT_MISMATCH",
+]);
+
+const INVOICE_CATEGORIES: Set<ExceptionCategory> = new Set([
+  "INVOICE_WITHOUT_ORDER",
+  "INVOICE_WITHOUT_CUSTOMER_CODE",
+]);
 
 const pipelineBuckets: { label: string; statuses: Order["status"][] }[] = [
   { label: "Waiting", statuses: ["DRAFT", "CONFIRMED"] },
@@ -40,8 +52,13 @@ export function OverviewView({
   canWrite: boolean;
   onSessionLost: () => void;
 }) {
+  const [showAllInvoices, setShowAllInvoices] = useState(false);
   const orders = useApiResource(() => api.orders(""), [], onSessionLost);
-  const exceptions = useApiResource(() => api.exceptions(10), [], onSessionLost);
+  const exceptions = useApiResource(
+    () => api.exceptions(showAllInvoices ? 500 : 10),
+    [showAllInvoices],
+    onSessionLost,
+  );
   const commercial = useApiResource(() => api.analyticsOverview(), [], onSessionLost);
   const receivables = useApiResource(() => api.analyticsReceivables(), [], onSessionLost);
   const sync = useApiResource(() => api.syncRuns(5), [], onSessionLost);
@@ -62,9 +79,39 @@ export function OverviewView({
     ["DELIVERY_PENDING", "DELIVERED"].includes(o.status),
   ).length;
 
-  const attentionRows: AttentionRow[] = useMemo(() => {
-    const items = (exceptions.data?.groups ?? []).flatMap((group) => group.items);
-    return items.map((item) => ({ ...item, order: item.order_id ? orderById.get(item.order_id) : undefined }));
+  const { orderRows, invoiceRows, orderTotalCount, invoiceTotalCount } = useMemo(() => {
+    const groups = exceptions.data?.groups ?? [];
+    let oTotal = 0;
+    let iTotal = 0;
+    const oItems: AttentionRow[] = [];
+    const iItems: AttentionRow[] = [];
+
+    for (const group of groups) {
+      if (ORDER_CATEGORIES.has(group.category)) {
+        oTotal += group.count;
+        for (const item of group.items) {
+          oItems.push({
+            ...item,
+            order: item.order_id ? orderById.get(item.order_id) : undefined,
+          });
+        }
+      } else if (INVOICE_CATEGORIES.has(group.category)) {
+        iTotal += group.count;
+        for (const item of group.items) {
+          iItems.push({
+            ...item,
+            order: item.order_id ? orderById.get(item.order_id) : undefined,
+          });
+        }
+      }
+    }
+
+    return {
+      orderRows: oItems,
+      invoiceRows: iItems,
+      orderTotalCount: oTotal,
+      invoiceTotalCount: iTotal,
+    };
   }, [exceptions.data, orderById]);
 
   return (
@@ -90,7 +137,9 @@ export function OverviewView({
         title="Needs attention"
         action={
           exceptions.data && exceptions.data.total > 0 ? (
-            <span className="section-count">{exceptions.data.total} open</span>
+            <span className="section-count">
+              {orderTotalCount} order · {invoiceTotalCount} invoice issues
+            </span>
           ) : undefined
         }
       >
@@ -98,28 +147,115 @@ export function OverviewView({
           <Skeleton />
         ) : exceptions.error ? (
           <ErrorState>Could not load exceptions.</ErrorState>
-        ) : attentionRows.length === 0 ? (
+        ) : orderTotalCount === 0 && invoiceTotalCount === 0 ? (
           <EmptyState>Nothing needs attention.</EmptyState>
         ) : (
-          <DataTable
-            columns={[
-              { key: "order", header: "Order", render: (row: AttentionRow) => row.order?.order_number ?? row.reference },
-              { key: "customer", header: "Customer", render: (row: AttentionRow) => row.order?.customer.name ?? "—" },
-              { key: "issue", header: "Issue", render: (row: AttentionRow) => row.detail },
-              {
-                key: "status",
-                header: "Status",
-                render: (row: AttentionRow) => (row.order ? <StatusBadge status={row.order.status} /> : "—"),
-              },
-              {
-                key: "required",
-                header: "Required",
-                render: (row: AttentionRow) => (row.order ? isoDate(row.order.required_date) : "—"),
-              },
-            ]}
-            rows={attentionRows}
-            rowKey={(row) => `${row.category}-${row.reference}`}
-          />
+          <div className="attention-groups">
+            {orderTotalCount > 0 && (
+              <div className="attention-group">
+                <div className="attention-group-head">
+                  <span className="attention-group-title">
+                    Order exceptions ({orderTotalCount})
+                  </span>
+                </div>
+                <DataTable
+                  columns={[
+                    {
+                      key: "reference",
+                      header: "Reference",
+                      render: (row: AttentionRow) => row.order?.order_number ?? row.reference,
+                    },
+                    {
+                      key: "customer",
+                      header: "Customer",
+                      render: (row: AttentionRow) =>
+                        row.customer_name ?? row.order?.customer.name ?? "—",
+                    },
+                    { key: "issue", header: "Issue", render: (row: AttentionRow) => row.detail },
+                    {
+                      key: "status",
+                      header: "Status",
+                      render: (row: AttentionRow) =>
+                        row.order ? <StatusBadge status={row.order.status} /> : "—",
+                    },
+                    {
+                      key: "required",
+                      header: "Required",
+                      render: (row: AttentionRow) =>
+                        row.document_date
+                          ? isoDate(row.document_date)
+                          : row.order
+                            ? isoDate(row.order.required_date)
+                            : "—",
+                    },
+                  ]}
+                  rows={orderRows}
+                  rowKey={(row) => `${row.category}-${row.reference}`}
+                />
+                {orderTotalCount > orderRows.length && (
+                  <p className="section-note">
+                    Showing {orderRows.length} of {orderTotalCount}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {invoiceTotalCount > 0 && (
+              <div className="attention-group">
+                <div className="attention-group-head">
+                  <span className="attention-group-title">
+                    Invoice backlog & data issues ({invoiceTotalCount})
+                  </span>
+                </div>
+                <DataTable
+                  columns={[
+                    {
+                      key: "reference",
+                      header: "Reference",
+                      render: (row: AttentionRow) => row.reference,
+                    },
+                    {
+                      key: "customer",
+                      header: "Customer",
+                      render: (row: AttentionRow) => row.customer_name ?? "—",
+                    },
+                    { key: "issue", header: "Issue", render: (row: AttentionRow) => row.detail },
+                    {
+                      key: "date",
+                      header: "Invoice date",
+                      render: (row: AttentionRow) =>
+                        row.document_date ? isoDate(row.document_date) : "—",
+                    },
+                    {
+                      key: "amount",
+                      header: "Amount",
+                      align: "right",
+                      render: (row: AttentionRow) =>
+                        row.total_amount ? money(row.total_amount) : "—",
+                    },
+                  ]}
+                  rows={invoiceRows}
+                  rowKey={(row) => `${row.category}-${row.reference}`}
+                />
+                <div className="attention-pagination-bar">
+                  <span>
+                    {invoiceTotalCount > invoiceRows.length
+                      ? `Showing ${invoiceRows.length} of ${invoiceTotalCount}`
+                      : `Showing all ${invoiceRows.length}`}
+                  </span>
+                  {invoiceTotalCount > 10 && (
+                    <button
+                      type="button"
+                      className="attention-view-all-btn"
+                      onClick={() => setShowAllInvoices((prev) => !prev)}
+                    >
+                      {showAllInvoices ? "Show 10" : `View all (${invoiceTotalCount})`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </Section>
 

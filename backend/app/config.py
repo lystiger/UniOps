@@ -1,3 +1,4 @@
+from datetime import date
 from functools import lru_cache
 
 from pydantic import Field, SecretStr, field_validator
@@ -47,6 +48,9 @@ class Settings(BaseSettings):
     easybooks_request_timeout_seconds: float = 20.0
     easybooks_max_retries: int = 3
     easybooks_sync_overlap_days: int = 7
+    # Optional start date (ISO YYYY-MM-DD). When set, Overview 'Needs attention'
+    # unlinked invoices only include documents dated on or after this date.
+    order_tracking_since: date | None = None
 
     @field_validator("session_lifetime_hours")
     @classmethod
@@ -63,6 +67,7 @@ class Settings(BaseSettings):
         "easybooks_username",
         "easybooks_password",
         "easybooks_org",
+        "order_tracking_since",
         mode="before",
     )
     @classmethod

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, UnauthorizedError } from "../api";
-import { money } from "../format";
+import { isoDate, money } from "../format";
 import type { AccountingStatus, InvoiceCandidate, Order, OrderAccounting } from "../types";
 
 const accountingMeta: Record<
@@ -151,8 +151,8 @@ export function AccountingPanel({
                     <div>
                       <strong>{invoice.invoice_number ?? invoice.sales_document_id}</strong>
                       <small>
-                        {invoice.document_date ?? "no date"} · {money(invoice.total_amount)} ·{" "}
-                        {invoice.link_method}
+                        {invoice.document_date ? isoDate(invoice.document_date) : "no date"} ·{" "}
+                        {money(invoice.total_amount)} · {invoice.link_method}
                         {invoice.created_by ? ` · by ${invoice.created_by}` : ""}
                       </small>
                     </div>
@@ -186,7 +186,7 @@ export function AccountingPanel({
                       <div>
                         <strong>{candidate.invoice_number ?? candidate.source_id}</strong>
                         <small>
-                          {candidate.document_date ?? "no date"} ·{" "}
+                          {candidate.document_date ? isoDate(candidate.document_date) : "no date"} ·{" "}
                           {money(candidate.total_amount)} · confidence {candidate.confidence}
                         </small>
                       </div>

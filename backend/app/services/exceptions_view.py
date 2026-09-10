@@ -12,11 +12,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.config import get_settings
+from app.integrations.easybooks.client import business_today
 from app.models import Order, OrderAccountingLink, OrderStatus, SalesDocument
 from app.services import order_to_cash
 
@@ -38,6 +41,9 @@ class ExceptionItem:
     category: ExceptionCategory
     reference: str
     detail: str
+    customer_name: str | None = None
+    document_date: date | None = None
+    total_amount: Decimal | None = None
     order_id: str | None = None
     sales_document_id: str | None = None
 
@@ -59,18 +65,29 @@ class ExceptionReport:
         return sum(group.count for group in self.groups)
 
 
+def _format_invoice_ref(doc: SalesDocument) -> str:
+    if doc.invoice_series and doc.invoice_number:
+        return f"Invoice {doc.invoice_series}/{doc.invoice_number}"
+    if doc.invoice_number:
+        return f"Invoice {doc.invoice_number}"
+    return f"Invoice {doc.source_document_number or doc.source_id}"
+
+
 def _delivered_without_invoice(session: Session) -> list[ExceptionItem]:
     linked = set(session.scalars(select(OrderAccountingLink.order_id)))
     orders = session.scalars(
         select(Order)
         .where(Order.status.in_(DELIVERED_STATES))
-        .options(selectinload(Order.customer))
+        .options(selectinload(Order.customer), selectinload(Order.lines))
     )
     return [
         ExceptionItem(
             category=ExceptionCategory.DELIVERED_ORDER_NOT_INVOICED,
             reference=order.order_number,
-            detail=f"{order.status.value} since {order.required_date} with no linked invoice",
+            detail=f"{order.status.value} order has no linked invoice",
+            customer_name=order.customer.name if order.customer else None,
+            document_date=order.required_date,
+            total_amount=order_to_cash.order_total(order),
             order_id=order.id,
         )
         for order in orders
@@ -78,35 +95,51 @@ def _delivered_without_invoice(session: Session) -> list[ExceptionItem]:
     ]
 
 
-def _invoices_without_order(session: Session) -> list[ExceptionItem]:
+def _invoices_without_order(
+    session: Session, order_tracking_since: date | None = None
+) -> list[ExceptionItem]:
     linked = set(session.scalars(select(OrderAccountingLink.sales_document_id)))
-    documents = session.scalars(select(SalesDocument))
-    return [
-        ExceptionItem(
-            category=ExceptionCategory.INVOICE_WITHOUT_ORDER,
-            reference=document.invoice_number or document.source_document_number
-            or document.source_id,
-            detail=(
-                f"invoice dated {document.document_date} for "
-                f"{document.accounting_object_name or 'unknown customer'} "
-                "is not linked to any UniOps order"
-            ),
-            sales_document_id=document.id,
+    documents = session.scalars(
+        select(SalesDocument).order_by(SalesDocument.document_date.desc().nullslast())
+    )
+    found = []
+    for document in documents:
+        if document.id in linked:
+            continue
+        if (
+            order_tracking_since is not None
+            and document.document_date is not None
+            and document.document_date < order_tracking_since
+        ):
+            continue
+        found.append(
+            ExceptionItem(
+                category=ExceptionCategory.INVOICE_WITHOUT_ORDER,
+                reference=_format_invoice_ref(document),
+                detail="Invoice not linked to any UniOps order",
+                customer_name=document.accounting_object_name,
+                document_date=document.document_date,
+                total_amount=document.total_amount,
+                sales_document_id=document.id,
+            )
         )
-        for document in documents
-        if document.id not in linked
-    ]
+    return found
 
 
 def _invoices_without_customer_code(session: Session) -> list[ExceptionItem]:
     documents = session.scalars(
-        select(SalesDocument).where(SalesDocument.accounting_object_code.is_(None))
+        select(SalesDocument)
+        .where(SalesDocument.accounting_object_code.is_(None))
+        .order_by(SalesDocument.document_date.desc().nullslast())
     )
     return [
         ExceptionItem(
             category=ExceptionCategory.INVOICE_WITHOUT_CUSTOMER_CODE,
-            reference=document.invoice_number or document.source_id,
-            detail="no canonical customer code, so it cannot be attributed or matched",
+            reference=_format_invoice_ref(document),
+            detail="No canonical customer code; cannot be attributed or matched",
+            customer_name=document.accounting_object_name,
+            document_date=document.document_date,
+            total_amount=document.total_amount,
             sales_document_id=document.id,
         )
         for document in documents
@@ -131,10 +164,10 @@ def _ambiguous_candidates(session: Session) -> list[ExceptionItem]:
                 ExceptionItem(
                     category=ExceptionCategory.AMBIGUOUS_INVOICE_CANDIDATES,
                     reference=order.order_number,
-                    detail=(
-                        f"{len(candidates)} plausible invoices; a person must choose, "
-                        "because picking the highest score would state a guess as fact"
-                    ),
+                    detail=f"{len(candidates)} plausible invoices require manual selection",
+                    customer_name=order.customer.name if order.customer else None,
+                    document_date=order.required_date,
+                    total_amount=order_to_cash.order_total(order),
                     order_id=order.id,
                 )
             )
@@ -160,9 +193,12 @@ def _linked_disagreements(session: Session) -> tuple[list[ExceptionItem], list[E
                     category=ExceptionCategory.LINKED_CUSTOMER_MISMATCH,
                     reference=order.order_number,
                     detail=(
-                        f"order customer {code} but invoice customer "
-                        f"{document.accounting_object_code}"
+                        f"Order customer ({code}) differs from invoice customer "
+                        f"({document.accounting_object_code})"
                     ),
+                    customer_name=order.customer.name if order.customer else None,
+                    document_date=order.required_date,
+                    total_amount=document.total_amount,
                     order_id=order.id,
                     sales_document_id=document.id,
                 )
@@ -173,12 +209,10 @@ def _linked_disagreements(session: Session) -> tuple[list[ExceptionItem], list[E
                 ExceptionItem(
                     category=ExceptionCategory.LINKED_AMOUNT_MISMATCH,
                     reference=order.order_number,
-                    detail=(
-                        f"order total {total} matches neither invoice subtotal "
-                        f"{document.subtotal} nor total {document.total_amount}. "
-                        "Freight, tax handling, discounts, or a split invoice can "
-                        "all explain this; it is evidence, not proof of corruption"
-                    ),
+                    detail="Order total differs from invoice amount",
+                    customer_name=order.customer.name if order.customer else None,
+                    document_date=order.required_date,
+                    total_amount=document.total_amount,
                     order_id=order.id,
                     sales_document_id=document.id,
                 )
@@ -186,18 +220,34 @@ def _linked_disagreements(session: Session) -> tuple[list[ExceptionItem], list[E
     return customer_issues, amount_issues
 
 
-def report(session: Session, as_of: date | None = None, limit: int = 50) -> ExceptionReport:
+def report(
+    session: Session,
+    as_of: date | None = None,
+    limit: int = 50,
+    order_tracking_since: date | None = None,
+) -> ExceptionReport:
+    if as_of is None:
+        as_of = business_today()
+    if order_tracking_since is None:
+        order_tracking_since = get_settings().order_tracking_since
+
     customer_issues, amount_issues = _linked_disagreements(session)
     collected: list[tuple[ExceptionCategory, list[ExceptionItem]]] = [
         (ExceptionCategory.DELIVERED_ORDER_NOT_INVOICED, _delivered_without_invoice(session)),
         (ExceptionCategory.AMBIGUOUS_INVOICE_CANDIDATES, _ambiguous_candidates(session)),
         (ExceptionCategory.LINKED_CUSTOMER_MISMATCH, customer_issues),
         (ExceptionCategory.LINKED_AMOUNT_MISMATCH, amount_issues),
-        (ExceptionCategory.INVOICE_WITHOUT_ORDER, _invoices_without_order(session)),
-        (ExceptionCategory.INVOICE_WITHOUT_CUSTOMER_CODE, _invoices_without_customer_code(session)),
+        (
+            ExceptionCategory.INVOICE_WITHOUT_ORDER,
+            _invoices_without_order(session, order_tracking_since=order_tracking_since),
+        ),
+        (
+            ExceptionCategory.INVOICE_WITHOUT_CUSTOMER_CODE,
+            _invoices_without_customer_code(session),
+        ),
     ]
     return ExceptionReport(
-        as_of=as_of or date.today(),
+        as_of=as_of,
         # Every category is always present, so "none found" is visibly none found
         # rather than a category that quietly stopped being computed.
         groups=[
