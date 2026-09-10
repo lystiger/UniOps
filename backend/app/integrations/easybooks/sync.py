@@ -539,14 +539,17 @@ def sync_bundle(
                             )
                             errors.append(f"sales detail {source_id}: {_sanitize_error(reason)}")
                     else:
+                        line_fetch_failed = False
                         source_id, rows = item
                         outcome = _upsert_purchase(session, run, source_id, rows)
-                    if outcome == "created":
-                        run.documents_created += 1
-                    elif outcome == "updated":
-                        run.documents_updated += 1
-                    else:
-                        run.documents_unchanged += 1
+
+                    if not line_fetch_failed:
+                        if outcome == "created":
+                            run.documents_created += 1
+                        elif outcome == "updated":
+                            run.documents_updated += 1
+                        else:
+                            run.documents_unchanged += 1
             except Exception as exc:  # each source document is independently auditable
                 run.documents_failed += 1
                 logger.exception(

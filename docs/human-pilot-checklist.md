@@ -67,7 +67,7 @@ uv run uniops user create --username factory_lead --role factory-read --full-nam
 6. Click **Send to delivery** → order moves to *Delivery / delivered* column.
 7. Click **Mark delivered** → order status becomes **Delivered**.
 8. Optional operational stages:
-   - Click **Mark invoiced** → order status becomes **Invoiced** (note: operational status; does not require an EasyBooks invoice link).
+   - Click **Mark invoiced** → order status becomes **Invoiced** (note: an operator can advance an order to `INVOICED` without a linked EasyBooks invoice; whether that is intended is open, see Topic 7 in [docs/finance-validation-questions.md](finance-validation-questions.md)).
    - Click **Close order** → order status becomes **Closed** (archived from board).
 
 ### Step 6: Order Cancellation Flow (`office` or `admin`)
@@ -111,6 +111,7 @@ uv run uniops user create --username factory_lead --role factory-read --full-nam
    - Click the calendar button to open the dual-month picker.
    - Select quick presets: *This Month*, *Last Month*, *Last 3 Months*, *Last Year*, or *Clear*.
    - Confirm analytics update cleanly upon date changes.
+   - *Note on Date Display*: Native browser `<input type="date">` controls render according to browser locale (e.g., `mm/dd/yyyy` under `en-US`), while the unambiguous Vietnamese `DD/MM/YYYY` representation is displayed alongside inside the Calendar trigger button (`(DD/MM/YYYY – DD/MM/YYYY)`).
 
 ### Step 10: EasyBooks Ingestion & Sync Observability
 1. Click **Data** in the navigation.

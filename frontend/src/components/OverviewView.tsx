@@ -138,7 +138,7 @@ export function OverviewView({
         action={
           exceptions.data && exceptions.data.total > 0 ? (
             <span className="section-count">
-              {orderTotalCount} order · {invoiceTotalCount} invoice issues
+              {orderTotalCount} order {orderTotalCount === 1 ? "issue" : "issues"} · {invoiceTotalCount} invoice {invoiceTotalCount === 1 ? "issue" : "issues"}
             </span>
           ) : undefined
         }
@@ -151,54 +151,58 @@ export function OverviewView({
           <EmptyState>Nothing needs attention.</EmptyState>
         ) : (
           <div className="attention-groups">
-            {orderTotalCount > 0 && (
-              <div className="attention-group">
-                <div className="attention-group-head">
-                  <span className="attention-group-title">
-                    Order exceptions ({orderTotalCount})
-                  </span>
-                </div>
-                <DataTable
-                  columns={[
-                    {
-                      key: "reference",
-                      header: "Reference",
-                      render: (row: AttentionRow) => row.order?.order_number ?? row.reference,
-                    },
-                    {
-                      key: "customer",
-                      header: "Customer",
-                      render: (row: AttentionRow) =>
-                        row.customer_name ?? row.order?.customer.name ?? "—",
-                    },
-                    { key: "issue", header: "Issue", render: (row: AttentionRow) => row.detail },
-                    {
-                      key: "status",
-                      header: "Status",
-                      render: (row: AttentionRow) =>
-                        row.order ? <StatusBadge status={row.order.status} /> : "—",
-                    },
-                    {
-                      key: "required",
-                      header: "Required",
-                      render: (row: AttentionRow) =>
-                        row.document_date
-                          ? isoDate(row.document_date)
-                          : row.order
-                            ? isoDate(row.order.required_date)
-                            : "—",
-                    },
-                  ]}
-                  rows={orderRows}
-                  rowKey={(row) => `${row.category}-${row.reference}`}
-                />
-                {orderTotalCount > orderRows.length && (
-                  <p className="section-note">
-                    Showing {orderRows.length} of {orderTotalCount}
-                  </p>
-                )}
+            <div className="attention-group">
+              <div className="attention-group-head">
+                <span className="attention-group-title">
+                  Order exceptions ({orderTotalCount})
+                </span>
               </div>
-            )}
+              {orderTotalCount === 0 ? (
+                <EmptyState>No order exceptions</EmptyState>
+              ) : (
+                <>
+                  <DataTable
+                    columns={[
+                      {
+                        key: "reference",
+                        header: "Reference",
+                        render: (row: AttentionRow) => row.order?.order_number ?? row.reference,
+                      },
+                      {
+                        key: "customer",
+                        header: "Customer",
+                        render: (row: AttentionRow) =>
+                          row.customer_name ?? row.order?.customer.name ?? "—",
+                      },
+                      { key: "issue", header: "Issue", render: (row: AttentionRow) => row.detail },
+                      {
+                        key: "status",
+                        header: "Status",
+                        render: (row: AttentionRow) =>
+                          row.order ? <StatusBadge status={row.order.status} /> : "—",
+                      },
+                      {
+                        key: "required",
+                        header: "Required",
+                        render: (row: AttentionRow) =>
+                          row.document_date
+                            ? isoDate(row.document_date)
+                            : row.order
+                              ? isoDate(row.order.required_date)
+                              : "—",
+                      },
+                    ]}
+                    rows={orderRows}
+                    rowKey={(row) => `${row.category}-${row.reference}`}
+                  />
+                  {orderTotalCount > orderRows.length && (
+                    <p className="section-note">
+                      Showing {orderRows.length} of {orderTotalCount}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
 
             {invoiceTotalCount > 0 && (
               <div className="attention-group">

@@ -361,8 +361,8 @@ describe("OverviewView Needs attention", () => {
       />,
     );
 
-    // Section count says what it counts
-    expect(await screen.findByText("1 order · 11 invoice issues")).toBeInTheDocument();
+    // Section count says what it counts with correct grammar
+    expect(await screen.findByText("1 order issue · 11 invoice issues")).toBeInTheDocument();
 
     // Visibly separate headings
     expect(screen.getByText("Order exceptions (1)")).toBeInTheDocument();
@@ -380,5 +380,64 @@ describe("OverviewView Needs attention", () => {
     // Truncation note "Showing 1 of 11" appears
     expect(screen.getByText("Showing 1 of 11")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View all (11)" })).toBeInTheDocument();
+  });
+
+  it("shows '0 order issues · 11 invoice issues' and renders 'Order exceptions (0)' with empty state when no order exceptions exist", async () => {
+    const mockExceptions = {
+      as_of: "2026-09-10",
+      total: 11,
+      groups: [
+        {
+          category: "INVOICE_WITHOUT_ORDER",
+          count: 11,
+          items: [
+            {
+              category: "INVOICE_WITHOUT_ORDER",
+              reference: "Invoice 1C26TSH/105",
+              detail: "Invoice not linked to any UniOps order",
+              customer_name: "CÔNG TY TNHH ABC",
+              document_date: "2026-06-30",
+              total_amount: "7210620.00",
+              order_id: null,
+              sales_document_id: "doc-105",
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/orders")) {
+        return new Response(JSON.stringify({ items: orders, total: orders.length }), { status: 200 });
+      }
+      if (url.includes("/api/operations/exceptions")) {
+        return new Response(JSON.stringify(mockExceptions), { status: 200 });
+      }
+      if (url.includes("/api/analytics/overview")) {
+        return new Response(JSON.stringify(commercialOverview), { status: 200 });
+      }
+      if (url.includes("/api/analytics/receivables")) {
+        return new Response(JSON.stringify(receivablesSummary), { status: 200 });
+      }
+      if (url.includes("/api/sync-runs")) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response("{}", { status: 404 });
+    });
+
+    render(
+      <OverviewView
+        onNavigateOrders={() => undefined}
+        onNewOrder={() => undefined}
+        canWrite={true}
+        onSessionLost={() => undefined}
+      />,
+    );
+
+    expect(await screen.findByText("0 order issues · 11 invoice issues")).toBeInTheDocument();
+    expect(screen.getByText("Order exceptions (0)")).toBeInTheDocument();
+    expect(screen.getByText("No order exceptions")).toBeInTheDocument();
+    expect(screen.getByText("Invoice backlog & data issues (11)")).toBeInTheDocument();
   });
 });

@@ -1879,6 +1879,12 @@ input[inputmode="decimal"] {
   transform: rotate(180deg);
 }
 
+.dual-calendar-selected-range {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brand-dark);
+}
+
 /* Dual Calendar Popover */
 .dual-calendar-popover {
   position: absolute;

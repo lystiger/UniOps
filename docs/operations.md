@@ -27,21 +27,14 @@ PostgreSQL 17 is the normal integrated development target and the production bas
 
 ## Local development on PostgreSQL
 
-The integrated local development workflow runs against PostgreSQL:
-
-```bash
-docker compose up -d db
-export UNIOPS_DATABASE_URL="postgresql+psycopg://uniops:$UNIOPS_DB_PASSWORD@127.0.0.1:5432/uniops"
-uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
-cd frontend && npm run dev
-```
-
-*Prerequisites*:
-- Docker running on the host machine.
-- `UNIOPS_DB_PASSWORD` can be sourced from `.env`: `export UNIOPS_DB_PASSWORD="$(grep '^UNIOPS_DB_PASSWORD=' .env | cut -d= -f2-)"`.
-- Working directory is repository root for the first four commands; `frontend` directory for `npm run dev`.
-- `app.main:app` is resolved because `uv sync` installs `backend/app` as an editable package.
+For local setup and daily development against PostgreSQL, follow the 7-step sequence in [README.md](../README.md#local-development):
+1. **Requirements**: Python 3.12+, uv, Node.js 22+, Docker & Docker Compose.
+2. **Environment**: Copy `.env.example` to `.env` and set `UNIOPS_DB_PASSWORD`.
+3. **Install dependencies**: `uv sync --all-groups && cd frontend && npm install && cd ..`.
+4. **PostgreSQL setup & migration**: `docker compose up -d db`, set `UNIOPS_DATABASE_URL`, and run `uv run alembic upgrade head`.
+5. **Create first user**: `uv run uniops user create --username you --role admin`.
+6. **Start servers**: In separate terminals, run `uv run uvicorn app.main:app --reload` (backend) and `npm run dev` (frontend).
+7. **Open application**: Access `http://localhost:5173`. Interactive API docs at `http://127.0.0.1:8000/docs`.
 
 ## Test database safety
 
@@ -311,10 +304,25 @@ nowhere else. Sales and purchase data can always be re-read from EasyBooks.
 
 ## Known Operational Limitations & Observability
 
-- **Operational `INVOICED` Status Independence**: Operators can manually advance an order to `INVOICED` on the Order Board even if no EasyBooks invoice is linked. This is an operational workflow flag, not a confirmed accounting fact. Linking/unlinking invoices operates independently via the accounting drawer.
+- **Operational `INVOICED` Status Independence**: An operator can advance an order to `INVOICED` without a linked EasyBooks invoice; whether that is intended is open, see Topic 7 in [docs/finance-validation-questions.md](finance-validation-questions.md). Linking/unlinking invoices operates independently via the accounting drawer.
 - **Reconciliation Warnings Observability**: Sync-run reconciliation warnings and normalization discrepancies appear as aggregate counts on the Data page ("Warnings" column). Full per-record warning details are logged to server logs. The Overview page displays operational exceptions (unlinked invoices, ambiguous candidates, customer mismatches).
-- **Data Page is Read-Only**: The Data page displays synchronization run history (`GET /api/sync-runs`). There is no web-based manual sync trigger button; sync runs are executed via scheduled cron, background processes, or CLI (`uv run uniops sync-easybooks`).
+- **Data Page is Read-Only**: The Data page displays synchronization run history (`GET /api/sync-runs`). There is no web-based manual sync trigger button; sync runs run only via `uv run uniops sync-easybooks`. No scheduler, cron job, or background sync worker is bundled in the repository.
+- **Sync Run Status and Accounting Invariant**:
+  - Each document in `documents_seen` is counted in exactly one of `created`, `updated`, `unchanged`, or `failed` (`created + updated + unchanged + failed == seen`).
+  - When detail lines fail to fetch for a document, existing lines are preserved, the header is upserted, and the document is counted as `failed` only (never as updated or unchanged).
+  - A sync run with zero failures ends `SUCCEEDED`.
+  - A sync run where some documents succeeded and some failed ends `PARTIAL`.
+  - A sync run where every document's detail fetch failed (or where zero documents succeeded) ends `FAILED`. This conservative behavior ensures that a total detail failure is never disguised as a partial success.
 - **No User Management API**: User accounts are administered strictly from the CLI (`uv run uniops user`). The API exposes only `GET /api/users` (for `ADMIN` role) to list account statuses.
+
+### Scheduled Synchronization Example
+
+If scheduled ingestion is desired, the system operator can install a cron job (analogous to the nightly backup job):
+
+```cron
+# Run EasyBooks synchronization every hour at minute 15
+15 * * * * cd /home/uniops/UniOps && /home/uniops/UniOps/.venv/bin/uv run uniops sync-easybooks >> /var/log/uniops-sync.log 2>&1
+```
 
 ## Operational Configuration: Order Tracking Start Date
 

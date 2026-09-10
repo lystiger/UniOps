@@ -318,6 +318,8 @@ class ExceptionItemRead(ApiModel):
     customer_name: str | None = None
     document_date: date | None = None
     total_amount: Decimal | None = None
+    order_total: Decimal | None = None
+    invoice_subtotal: Decimal | None = None
     order_id: str | None = None
     sales_document_id: str | None = None
 

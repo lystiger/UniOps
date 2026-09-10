@@ -98,3 +98,25 @@ test("Orders board still opens the accounting panel for the seeded order", async
   await panel.getByRole("button", { name: "Close" }).click();
   await expect(panel).toHaveCount(0);
 });
+
+test("DateRangeFilter displays unambiguously in en-US and vi-VN locales", async ({ browser }) => {
+  for (const locale of ["en-US", "vi-VN"]) {
+    const context = await browser.newContext({ locale });
+    const page = await context.newPage();
+    await signIn(page);
+    await page.getByRole("button", { name: "Finance" }).click();
+    await expect(page.getByRole("heading", { name: "Finance" })).toBeVisible();
+
+    await page.getByLabel("From").fill("2026-06-01");
+    await page.getByLabel("To").fill("2026-06-30");
+
+    // The unambiguous DD/MM/YYYY text is displayed in the calendar trigger:
+    await expect(page.locator(".dual-calendar-trigger")).toContainText("01/06/2026 – 30/06/2026");
+
+    // Capture screenshot
+    await page.locator(".date-range-bar").screenshot({
+      path: `../../output/playwright/date-filter-${locale}.png`,
+    });
+    await context.close();
+  }
+});

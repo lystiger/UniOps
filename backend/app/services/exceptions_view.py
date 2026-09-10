@@ -44,6 +44,8 @@ class ExceptionItem:
     customer_name: str | None = None
     document_date: date | None = None
     total_amount: Decimal | None = None
+    order_total: Decimal | None = None
+    invoice_subtotal: Decimal | None = None
     order_id: str | None = None
     sales_document_id: str | None = None
 
@@ -205,14 +207,28 @@ def _linked_disagreements(session: Session) -> tuple[list[ExceptionItem], list[E
             )
         total = order_to_cash.order_total(order)
         if total is not None and total not in (document.subtotal, document.total_amount):
+            def _format_vnd(val: Decimal | None) -> str:
+                if val is None:
+                    return "—"
+                return f"{val:,.0f} ₫".replace(",", ".")
+
+            subtotal_fmt = _format_vnd(document.subtotal)
+            invoice_total_fmt = _format_vnd(document.total_amount)
+            order_total_fmt = _format_vnd(total)
+
             amount_issues.append(
                 ExceptionItem(
                     category=ExceptionCategory.LINKED_AMOUNT_MISMATCH,
                     reference=order.order_number,
-                    detail="Order total differs from invoice amount",
+                    detail=(
+                        f"Order total {order_total_fmt} matches neither invoice subtotal "
+                        f"{subtotal_fmt} nor total {invoice_total_fmt}"
+                    ),
                     customer_name=order.customer.name if order.customer else None,
                     document_date=order.required_date,
                     total_amount=document.total_amount,
+                    order_total=total,
+                    invoice_subtotal=document.subtotal,
                     order_id=order.id,
                     sales_document_id=document.id,
                 )

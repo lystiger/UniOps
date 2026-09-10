@@ -118,25 +118,75 @@ The repository is a small monorepo:
 
 PostgreSQL 17 is the integrated-development baseline and production deployment target. SQLite remains supported for fast unit tests and isolated local checks. The same test suite runs against PostgreSQL with `make test-pg`, so portability is a checked claim rather than an assumption. API handlers are async entry points around short synchronous database operations; this is intentionally simple for current load and should be revisited before high concurrency.
 
-## Local development on PostgreSQL
+## Local development
 
-To run the application locally against the PostgreSQL baseline:
+### 1. Requirements
 
-1. Obtain or set the database password (can be read from `.env`):
-   ```bash
-   export UNIOPS_DB_PASSWORD="$(grep '^UNIOPS_DB_PASSWORD=' .env 2>/dev/null | cut -d= -f2-)"
-   ```
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/)
+- Node.js 22+ and npm
+- Docker and Docker Compose (for PostgreSQL 17 development baseline)
 
-2. Start the database, run migrations, and start services in this exact order:
-   ```bash
-   docker compose up -d db
-   export UNIOPS_DATABASE_URL="postgresql+psycopg://uniops:$UNIOPS_DB_PASSWORD@127.0.0.1:5432/uniops"
-   uv run alembic upgrade head
-   uv run uvicorn app.main:app --reload
-   cd frontend && npm run dev
-   ```
+### 2. Environment configuration
 
-*Note*: The uvicorn app path `app.main:app` resolves because `uv sync` installs `backend/app` as an editable package. The Vite development server on port 5173 proxies `/api` to `http://127.0.0.1:8000`.
+Copy `.env.example` to `.env`. `.env` is ignored by Git and stores instance configuration:
+
+```bash
+cp .env.example .env
+```
+
+Set `UNIOPS_DB_PASSWORD` in `.env` or export it in your shell:
+
+```bash
+export UNIOPS_DB_PASSWORD="$(grep '^UNIOPS_DB_PASSWORD=' .env 2>/dev/null | cut -d= -f2-)"
+```
+
+### 3. Install dependencies
+
+Install backend and frontend dependencies from the repository root:
+
+```bash
+uv sync --all-groups
+cd frontend && npm install && cd ..
+```
+
+`uv sync` installs `backend/app` as the editable `uniops` package, so `app.*` imports and the `uniops` CLI work from the repository root without extra `PYTHONPATH` handling.
+
+### 4. PostgreSQL development database and migrations
+
+PostgreSQL 17 is the integrated-development baseline. Start the database container, configure the connection URL, and run database migrations:
+
+```bash
+docker compose up -d db
+export UNIOPS_DATABASE_URL="postgresql+psycopg://uniops:$UNIOPS_DB_PASSWORD@127.0.0.1:5432/uniops"
+uv run alembic upgrade head
+```
+
+### 5. Create the first user account
+
+Create an administrative account before the first sign-in, because there are no default accounts:
+
+```bash
+uv run uniops user create --username you --role admin
+```
+
+### 6. Start the API and frontend
+
+The API server and Vite development server must run in separate terminals:
+
+**Terminal 1 (Backend API):**
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+**Terminal 2 (Frontend Dev Server):**
+```bash
+cd frontend && npm run dev
+```
+
+### 7. Open the application
+
+Open `http://localhost:5173`. The Vite development server on port 5173 proxies `/api` requests to `http://127.0.0.1:8000`, so authentication session cookies remain same-origin. API documentation is interactively accessible at `http://127.0.0.1:8000/docs`. See [Operations](docs/operations.md) for full deployment and runbook details.
 
 ## Test database safety
 
@@ -154,35 +204,6 @@ To run the application locally against the PostgreSQL baseline:
 - **Managing `uniops_test`**:
   - `make db-test-init`: Creates `uniops_test` inside the Postgres container if not already present. Must be run before executing `make test-pg`. Fails loudly if the database container is down.
   - `make db-test-reset`: Safely drops and recreates `uniops_test` to recover from dirty test states.
-
-## Accounts and quickstart
-
-Install dependencies and run frontend:
-
-```bash
-uv sync --all-groups
-cd frontend && npm install
-```
-
-Create an account before the first sign-in, because there is no default one:
-
-```bash
-uv run uniops user create --username you --role admin
-```
-
-Open `http://localhost:5173`. API documentation is available at `http://127.0.0.1:8000/docs`. See [Operations](docs/operations.md) for full deployment and runbook details.
-
-Build the schema or bring it to the current revision with:
-
-```bash
-uv run alembic upgrade head
-```
-
-Validate a migration from a clean temporary database:
-
-```bash
-UNIOPS_DATABASE_URL=sqlite:////tmp/uniops-clean.db uv run alembic upgrade head
-```
 
 All timestamps are stored using timezone-capable columns and application timestamps are UTC. Dates represent business calendar dates. Money uses fixed-scale `NUMERIC(18,2)` and Python `Decimal`; quantities use `NUMERIC(18,4)`. The API rejects JSON floating-point values for financial and quantity inputs—send decimal strings.
 
@@ -329,8 +350,8 @@ make test-pg
 - EasyBooks returns an empty result rather than an error for several misconfigurations - a missing `group`, an inverted date window, an empty `listMaterialGoods`. Where UniOps can detect these it refuses instead of reporting zero rows.
 - Live ingestion has been run against the company account and is verified across full years 2024-2026 and a year boundary, with counts reconciling exactly. Only sales and purchases are ingested; no other EasyBooks entity is read.
 - The purchase report ends with a grand-total footer row that carries no document identity. It was previously ingested as a purchase document and doubled all-time purchase totals; it is now recognised, skipped, and counted as a reconciliation warning.
-- **Operational `INVOICED` status independence**: The Order Board allows advancing an order to `INVOICED` manually without requiring a linked EasyBooks invoice. This acts as an internal operational progress indicator; invoice linking and reconciliation are tracked independently.
-- **Reconciliation warnings and observability**: Sync-run reconciliation warnings and normalization discrepancies appear as aggregate counts on the Data page ("Warnings" column); detailed logs are emitted to server logs. The Overview page displays operational exceptions (unlinked invoices, candidate ambiguities). The Data page is read-only (`GET /api/sync-runs`); sync runs are initiated via CLI or scheduled background jobs.
+- **Operational `INVOICED` status independence**: An operator can advance an order to `INVOICED` without a linked EasyBooks invoice; whether that is intended is open, see Topic 7 in `docs/finance-validation-questions.md`. Linking/unlinking invoices operates independently via the accounting drawer.
+- **Reconciliation warnings and observability**: Sync-run reconciliation warnings and normalization discrepancies appear as aggregate counts on the Data page ("Warnings" column); detailed logs are emitted to server logs. The Overview page displays operational exceptions (unlinked invoices, candidate ambiguities). The Data page is read-only (`GET /api/sync-runs`); sync runs run only via `uv run uniops sync-easybooks`. No scheduler, cron job, or background sync worker is bundled in the repository.
 - **Operational order tracking cutover (`UNIOPS_ORDER_TRACKING_SINCE`)**: Historical unlinked EasyBooks invoices can be filtered on the Overview page by setting `UNIOPS_ORDER_TRACKING_SINCE=YYYY-MM-DD`. When unset, all unlinked invoices are reported. Undated documents are always reported.
 - **No user management API**: User accounts are created, modified, and disabled strictly from the CLI (`uv run uniops user`). The API exposes only `GET /api/users` for administrators to view account listings.
 - Purchase VAT comes from `thueGTGT`, which is a VAT **amount** in dong rather than a rate. Every observed line divides out to 0.08 of its purchase amount, but no VAT rate is inferred or stored from that.

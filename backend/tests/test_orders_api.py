@@ -167,3 +167,56 @@ def test_cannot_cancel_order_with_linked_invoices_api(client, session):
     assert cancel_res.status_code == 409
     assert "cannot cancel an order with linked invoices" in cancel_res.json()["detail"]
 
+
+def test_can_cancel_order_after_unlinking_invoices(client, session):
+    from datetime import date
+    from decimal import Decimal
+
+    from app.models import SalesDocument
+
+    customer, product = _catalog(client)
+    order = client.post("/api/orders", json=_order_payload(customer["id"], product["id"])).json()
+
+    doc = SalesDocument(
+        source_id="INV-API-TEST-2",
+        document_date=date(2026, 8, 2),
+        source_type="SA_INVOICE",
+        invoice_number="INV-API-02",
+        invoice_series="1C26TSH",
+        accounting_object_code="KH-TEST",
+        accounting_object_name="Test Customer",
+        subtotal=Decimal("10000.00"),
+        vat_amount=Decimal("1000.00"),
+        total_amount=Decimal("11000.00"),
+        currency_id="VND",
+        normalized_hash="hash_api_test_2",
+    )
+    session.add(doc)
+    session.commit()
+
+    link_res = client.post(
+        f"/api/orders/{order['id']}/invoice-links",
+        json={"sales_document_id": doc.id},
+    )
+    assert link_res.status_code == 201
+    invoices = link_res.json()["invoices"]
+    assert len(invoices) == 1
+    link_id = invoices[0]["link_id"]
+
+    cancel_res1 = client.post(
+        f"/api/orders/{order['id']}/status",
+        json={"status": "CANCELLED"},
+    )
+    assert cancel_res1.status_code == 409
+
+    del_res = client.delete(f"/api/orders/{order['id']}/invoice-links/{link_id}")
+    assert del_res.status_code == 200
+
+    cancel_res2 = client.post(
+        f"/api/orders/{order['id']}/status",
+        json={"status": "CANCELLED"},
+    )
+    assert cancel_res2.status_code == 200
+    assert cancel_res2.json()["status"] == "CANCELLED"
+
+

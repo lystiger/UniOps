@@ -260,6 +260,8 @@ export interface ExceptionItem {
   customer_name: string | null;
   document_date: string | null;
   total_amount: string | null;
+  order_total?: string | null;
+  invoice_subtotal?: string | null;
   order_id: string | null;
   sales_document_id: string | null;
 }

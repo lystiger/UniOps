@@ -4,7 +4,7 @@ EasyBooks stays the accounting system of record throughout. Nothing here writes
 to it, and every accounting state is derived rather than stored.
 """
 
-from datetime import date
+from datetime import UTC, date
 from decimal import Decimal
 
 import pytest
@@ -643,11 +643,79 @@ def test_invoice_without_order_respects_tracking_date_and_carries_customer_name(
     assert undated_item.total_amount == Decimal("3000.00")
 
 
-def test_exceptions_report_defaults_as_of_to_business_today(session):
-    from app.integrations.easybooks.client import business_today
+def test_exceptions_report_defaults_as_of_to_business_today(session, monkeypatch):
+    from datetime import date, datetime
 
-    rep = exceptions_view.report(session)
-    assert rep.as_of == business_today()
+    import app.integrations.easybooks.client as client_mod
+    import app.services.exceptions_view as exc_mod
+
+    # Business date in UTC+7 at 2026-09-10T20:00:00Z is 2026-09-11
+    fixed_utc = datetime(2026, 9, 10, 20, 0, 0, tzinfo=UTC)
+
+    class MockDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is not None:
+                return fixed_utc.astimezone(tz)
+            return fixed_utc
+
+    monkeypatch.setattr(client_mod, "datetime", MockDateTime)
+
+    # Server date is 2026-09-10
+    class MockDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 9, 10)
+
+    monkeypatch.setattr(exc_mod, "date", MockDate)
+
+    rep = exc_mod.report(session)
+    assert rep.as_of == date(2026, 9, 11)
+
+
+def test_linked_amount_mismatch_includes_numbers_and_structured_fields(session, office_client):
+    customer = _customer(session)
+    _sync_invoices(
+        session,
+        {
+            "id": "inv-mismatch",
+            "date": "2026-03-01",
+            "typeID": 320,
+            "typeName": "Bán hàng chưa thu tiền",
+            "invoiceNo": "INV-MISMATCH",
+            "invoiceSeries": "1C26TSH",
+            "accountingObjectCode": CUSTOMER_CODE,
+            "accountingObjectName": f"Customer {CUSTOMER_CODE}",
+            "totalAmount": "4545455.00",
+            "totalVATAmount": "454545.00",
+            "totalAllAmount": "5000000.00",
+        },
+    )
+    order = _order(
+        session,
+        customer,
+        "2026-03-01",
+        unit_price="600000.00",
+    )
+    document = session.scalar(
+        select(SalesDocument).where(SalesDocument.source_id == "inv-mismatch")
+    )
+    office_client.post(
+        f"/api/orders/{order.id}/invoice-links", json={"sales_document_id": document.id}
+    )
+
+    resp = office_client.get("/api/operations/exceptions").json()
+    group = next(g for g in resp["groups"] if g["category"] == "LINKED_AMOUNT_MISMATCH")
+    assert group["count"] == 1
+    item = group["items"][0]
+    expected_detail = (
+        "Order total 6.000.000 ₫ matches neither invoice subtotal 4.545.455 ₫ nor total 5.000.000 ₫"
+    )
+    assert item["detail"] == expected_detail
+    assert Decimal(str(item["order_total"])) == Decimal("6000000.00")
+    assert Decimal(str(item["invoice_subtotal"])) == Decimal("4545455.00")
+    assert Decimal(str(item["total_amount"])) == Decimal("5000000.00")
+
 
 
 def test_exceptions_api_supports_order_tracking_since(session, office_client):

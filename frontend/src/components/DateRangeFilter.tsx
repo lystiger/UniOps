@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isoDate } from "../format";
 
 export interface DateRangeFilterProps {
   fromDate: string;
@@ -184,6 +185,11 @@ export function DateRangeFilter({ fromDate, toDate, onChange }: DateRangeFilterP
             <line x1="3" y1="10" x2="21" y2="10" />
           </svg>
           <span>Calendar</span>
+          {(fromDate || toDate) && (
+            <span className="dual-calendar-selected-range">
+              ({fromDate ? isoDate(fromDate) : "—"} – {toDate ? isoDate(toDate) : "—"})
+            </span>
+          )}
           <svg className={`trigger-chevron ${isOpen ? "open" : ""}`} viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="6 9 12 15 18 9" />
           </svg>
