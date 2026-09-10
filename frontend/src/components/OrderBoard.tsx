@@ -110,7 +110,14 @@ export function OrderBoard({
     setError("");
     try {
       const updated = await api.changeStatus(order.id, target);
-      setOrders((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      // A single-order read never computes accounting_status (see OrderRead) -
+      // it comes back null here, not "not invoiced". Keep the board's last known
+      // value rather than have a routine status change blank the badge.
+      setOrders((items) =>
+        items.map((item) =>
+          item.id === updated.id ? { ...updated, accounting_status: item.accounting_status } : item,
+        ),
+      );
     } catch (reason) {
       if (reason instanceof UnauthorizedError) {
         onSessionLost();

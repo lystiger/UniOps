@@ -1575,13 +1575,405 @@ input[inputmode="decimal"],
   border-bottom: 1px solid var(--line);
 }
 
-.date-range-filter {
+/* --- Dual-Calendar Date Range Filter (UniOps Emerald Palette) --- */
+
+.date-range-filter-root {
+  position: relative;
   display: flex;
+  flex-direction: column;
+}
+
+.date-range-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.date-range-input-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.date-range-input-label span {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.date-range-input-label input {
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  background: var(--paper-raised);
+  font-size: 13px;
+  color: var(--ink);
+  transition: border-color var(--motion-fast) ease;
+}
+
+.date-range-input-label input:focus {
+  outline: none;
+  border-color: var(--brand-green);
+  box-shadow: 0 0 0 2px var(--brand-tint);
+}
+
+.dual-calendar-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  height: 35px;
+  white-space: nowrap;
+  transition: all var(--motion-fast) ease;
+}
+
+.dual-calendar-trigger:hover,
+.dual-calendar-trigger.active {
+  background: var(--paper-sunk);
+  border-color: var(--brand-green);
+  color: var(--brand-dark);
+}
+
+.dual-calendar-trigger svg {
+  color: var(--brand-green);
+}
+
+.dual-calendar-trigger .trigger-chevron {
+  color: var(--ink-muted);
+  transition: transform var(--motion-fast) ease;
+}
+
+.dual-calendar-trigger .trigger-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Dual Calendar Popover */
+.dual-calendar-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  background: var(--paper-raised);
+  border: 1px solid var(--line-strong);
+  border-top: 3px solid var(--brand-green);
+  border-radius: var(--radius-card);
+  box-shadow: 0 16px 40px rgba(12, 27, 20, 0.14);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 95vw;
+}
+
+.dual-calendar-layout {
+  display: flex;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .dual-calendar-layout {
+    flex-direction: column;
+  }
+}
+
+/* Presets Sidebar */
+.dual-calendar-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 130px;
+  padding-right: 16px;
+  border-right: 1px solid var(--line);
+}
+
+@media (max-width: 768px) {
+  .dual-calendar-presets {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    padding-right: 0;
+    padding-bottom: 12px;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+.presets-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+}
+
+.preset-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: all var(--motion-fast) ease;
+}
+
+.preset-btn:hover {
+  background: var(--brand-tint);
+  color: var(--brand-dark);
+}
+
+.preset-btn.clear {
+  color: var(--status-rejected-text);
+  margin-top: 6px;
+}
+
+.preset-btn.clear:hover {
+  background: var(--status-rejected-bg);
+  color: var(--status-rejected);
+}
+
+/* Dual Grids Container */
+.dual-calendar-grids-container {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.date-range-filter label {
-  min-width: 150px;
+.dual-calendar-nav-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+
+.cal-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--paper-raised);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: all var(--motion-fast) ease;
+}
+
+.cal-nav-btn:hover {
+  background: var(--paper-sunk);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.cal-nav-month-labels {
+  display: flex;
+  justify-content: space-around;
+  flex: 1;
+  padding: 0 12px;
+}
+
+.cal-month-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.dual-calendar-months {
+  display: flex;
+  gap: 24px;
+}
+
+@media (max-width: 600px) {
+  .dual-calendar-months {
+    flex-direction: column;
+  }
+}
+
+/* Month Grid */
+.month-grid-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 224px;
+}
+
+.month-grid-header {
+  display: none;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink);
+}
+
+.weekdays-row {
+  display: grid;
+  grid-template-columns: repeat(7, 32px);
+  text-align: center;
+}
+
+.weekday-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  padding: 4px 0;
+}
+
+.days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 32px);
+  grid-auto-rows: 32px;
+  row-gap: 2px;
+}
+
+.day-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.day-cell.blank {
+  cursor: default;
+  pointer-events: none;
+}
+
+.day-cell:hover:not(.blank) {
+  background: var(--paper-sunk);
+  border-radius: var(--radius-control);
+}
+
+/* Range Start & End - UniOps Brand Green */
+.day-cell.range-start,
+.day-cell.range-end,
+.day-cell.range-single {
+  background: var(--brand-green) !important;
+  color: #FFFFFF !important;
+  font-weight: 700;
+  z-index: 2;
+}
+
+.day-cell.range-start {
+  border-top-left-radius: var(--radius-control);
+  border-bottom-left-radius: var(--radius-control);
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.day-cell.range-end {
+  border-top-right-radius: var(--radius-control);
+  border-bottom-right-radius: var(--radius-control);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.day-cell.range-single {
+  border-radius: var(--radius-control);
+}
+
+/* In-Range Band - UniOps Soft Emerald Tint */
+.day-cell.in-range {
+  background: var(--brand-tint) !important;
+  color: var(--brand-dark) !important;
+  font-weight: 600;
+  border-radius: 0;
+}
+
+/* In-Hover Preview */
+.day-cell.in-hover {
+  background: rgba(234, 245, 238, 0.7) !important;
+  color: var(--brand-dark);
+  border-radius: 0;
+}
+
+/* Today indicator */
+.day-cell.is-today .day-number {
+  position: relative;
+}
+
+.day-cell.is-today:not(.range-start):not(.range-end) .day-number::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--brand-green);
+}
+
+/* Footer summary & actions */
+.dual-calendar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.range-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.range-badge {
+  display: inline-flex;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--brand-tint);
+  color: var(--brand-dark);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.range-badge.pending {
+  background: var(--status-pending-bg);
+  color: var(--status-pending-text);
+}
+
+.range-arrow {
+  color: var(--ink-faint);
+}
+
+.range-empty-text {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.footer-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 
 /* --- Tabs: a small number of visual treatments, not pills --- */

@@ -157,38 +157,7 @@ export function FilterBar({ children }: { children: ReactNode }) {
   return <div className="filter-bar">{children}</div>;
 }
 
-export function DateRangeFilter({
-  fromDate,
-  toDate,
-  onChange,
-}: {
-  fromDate: string;
-  toDate: string;
-  onChange: (next: { fromDate: string; toDate: string }) => void;
-}) {
-  return (
-    <div className="date-range-filter">
-      <label>
-        <span>From</span>
-        <input
-          type="date"
-          value={fromDate}
-          max={toDate || undefined}
-          onChange={(event) => onChange({ fromDate: event.target.value, toDate })}
-        />
-      </label>
-      <label>
-        <span>To</span>
-        <input
-          type="date"
-          value={toDate}
-          min={fromDate || undefined}
-          onChange={(event) => onChange({ fromDate, toDate: event.target.value })}
-        />
-      </label>
-    </div>
-  );
-}
+export { DateRangeFilter, type DateRangeFilterProps } from "./DateRangeFilter";
 
 // --- Status -----------------------------------------------------------------
 

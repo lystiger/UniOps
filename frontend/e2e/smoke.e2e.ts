@@ -16,13 +16,15 @@ test("the app loads and shows the sign-in screen", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "UniOps" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   await expect(page.getByLabel("Username")).toBeVisible();
-  await expect(page.getByLabel("Password")).toBeVisible();
+  // Exact: a non-exact match also catches the "Show password" toggle button,
+  // which is a real distinct control, not the field.
+  await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
 });
 
 test("the seeded office account can sign in", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Username").fill(E2E_USERNAME);
-  await page.getByLabel("Password").fill(E2E_PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   // The board, not the absence of the button: the button relabels itself to
   // "Signing in…" the moment it is clicked, so it goes as soon as the request

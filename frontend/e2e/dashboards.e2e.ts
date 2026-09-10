@@ -23,7 +23,7 @@ function facts(): SeededFacts {
 async function signIn(page: Page) {
   await page.goto("/");
   await page.getByLabel("Username").fill(E2E_USERNAME);
-  await page.getByLabel("Password").fill(E2E_PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Order board" })).toBeVisible();
 }
