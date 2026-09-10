@@ -106,8 +106,11 @@ describe("Navigation and page identity", () => {
     mockApi();
     render(<App />);
 
-    expect(await screen.findByText("OPS")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Order board" })).toBeInTheDocument();
+    // Wait for the board heading first: the loading screen carries the same
+    // "OPS" wordmark, so querying for it alone can catch that transient node
+    // instead of the topbar's.
+    expect(await screen.findByRole("heading", { name: "Order board" })).toBeInTheDocument();
+    expect(screen.getByText("OPS")).toBeInTheDocument();
     // The redesigned nav has no facility badge or fabricated live status.
     expect(screen.queryByText(/Hưng Yên/)).not.toBeInTheDocument();
     expect(screen.queryByText("LIVE")).not.toBeInTheDocument();

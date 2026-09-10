@@ -3,6 +3,7 @@ import { api } from "./api";
 import { AccountMenu } from "./components/AccountMenu";
 import { DataView } from "./components/DataView";
 import { FinanceView } from "./components/FinanceView";
+import { LoadingScreen } from "./components/LoadingScreen";
 import { Login } from "./components/Login";
 import { NewOrder } from "./components/NewOrder";
 import { OrderBoard } from "./components/OrderBoard";
@@ -34,14 +35,7 @@ export default function App() {
   }, []);
 
   if (checking) {
-    return (
-      <div className="loading-state-screen">
-        <div className="loading-indicator">
-          <span className="live-dot pulse" aria-hidden="true" />
-          <span>Verifying UniOps session…</span>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
   if (!user) {
     return <Login onSignedIn={setUser} />;
