@@ -1,63 +1,85 @@
-import { PipelineVisual } from "./PipelineVisual";
+import { api } from "../api";
+import { duration, latestSyncRuns, number, syncStatusLabel, syncStatusTone, timestamp } from "../format";
+import { useApiResource } from "../hooks";
+import { DataTable, EmptyState, ErrorState, PageHeader, Section, Skeleton, Status } from "./primitives";
+import type { SyncRun } from "../types";
 
-export function DataView() {
+export function DataView({ onSessionLost }: { onSessionLost: () => void }) {
+  const sync = useApiResource(() => api.syncRuns(20), [], onSessionLost);
+  const runs = sync.data ?? [];
+  const { lastSuccess, lastAttempt } = latestSyncRuns(runs);
+
   return (
     <div className="data-page">
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">05 / DATA · Pipeline &amp; synchronization</p>
-          <h1>Data &amp; synchronization pipelines</h1>
-          <p className="heading-sub">Đồng bộ dữ liệu kế toán và luồng tích hợp nhà máy</p>
-          <p className="heading-meta">UniGreen Operational Data Platform · Hưng Yên site</p>
-        </div>
-      </div>
+      <PageHeader title="Data" context="EasyBooks synchronization" />
 
-      <div className="data-pipeline-container">
-        <PipelineVisual
-          systemName="EasyBooks"
-          title="EasyBooks Enterprise Extraction Pipeline"
-          stages={[
-            { name: "Extract", subhead: "MSSQL Read replica", status: "complete", detail: "Invoices, customers, catalog" },
-            { name: "Transform", subhead: "Schema & decimal validation", status: "complete", detail: "Currency & tax normalizer" },
-            { name: "Load", subhead: "UniOps operational DB", status: "complete", detail: "Freshness verified" },
-          ]}
-          lastSync="09 Sep 2026 · 15:44"
-          freshnessStatus="fresh"
-          metrics={[
-            { label: "Target", value: "UniOps Primary" },
-            { label: "Reconciliation", value: "Strict 1:1" },
-            { label: "Failures", value: "0" },
-          ]}
-        />
+      <Section>
+        {sync.loading ? (
+          <Skeleton rows={1} />
+        ) : sync.error ? (
+          <ErrorState>Could not load synchronization history.</ErrorState>
+        ) : runs.length === 0 ? (
+          <EmptyState>No EasyBooks synchronization has run yet.</EmptyState>
+        ) : (
+          <dl className="accounting-facts">
+            <div>
+              <dt>Last successful sync</dt>
+              <dd>{lastSuccess ? timestamp(lastSuccess.started_at) : "—"}</dd>
+            </div>
+            <div>
+              <dt>Last attempt</dt>
+              <dd>{lastAttempt ? timestamp(lastAttempt.started_at) : "—"}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                {lastAttempt ? (
+                  <Status label={syncStatusLabel[lastAttempt.status]} tone={syncStatusTone[lastAttempt.status]} />
+                ) : (
+                  "—"
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Rows processed</dt>
+              <dd>{lastAttempt ? number(lastAttempt.documents_seen) : "—"}</dd>
+            </div>
+          </dl>
+        )}
+      </Section>
 
-        <div className="pipeline-principles-card">
-          <p className="eyebrow">INTEGRATION CONSTRAINTS</p>
-          <h3>Operational Data Rules</h3>
-          <div className="principles-grid">
-            <div className="principle-item">
-              <span className="principle-code">01</span>
-              <div>
-                <strong>UniOps is operational, not accounting</strong>
-                <p>Orders, production scheduling, slitting, cutting, packaging belong in UniOps.</p>
-              </div>
-            </div>
-            <div className="principle-item">
-              <span className="principle-code">02</span>
-              <div>
-                <strong>EasyBooks is accounting SoR</strong>
-                <p>Tax codes, ledger books, VAT invoices are maintained in EasyBooks exclusively.</p>
-              </div>
-            </div>
-            <div className="principle-item">
-              <span className="principle-code">03</span>
-              <div>
-                <strong>No blind auto-linking</strong>
-                <p>If more than one invoice matches an order amount, human verification is required.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Section title="Recent synchronization runs">
+        {sync.loading ? (
+          <Skeleton />
+        ) : sync.error ? (
+          <ErrorState>Could not load synchronization history.</ErrorState>
+        ) : runs.length === 0 ? (
+          <EmptyState>No synchronization runs recorded.</EmptyState>
+        ) : (
+          <DataTable
+            columns={[
+              { key: "time", header: "Time", render: (row: SyncRun) => timestamp(row.started_at) },
+              { key: "mode", header: "Mode", render: (row: SyncRun) => row.mode },
+              {
+                key: "status",
+                header: "Status",
+                render: (row: SyncRun) => <Status label={syncStatusLabel[row.status]} tone={syncStatusTone[row.status]} />,
+              },
+              { key: "rows", header: "Rows", align: "right", render: (row: SyncRun) => number(row.documents_seen) },
+              {
+                key: "duration",
+                header: "Duration / error",
+                render: (row: SyncRun) =>
+                  row.status === "FAILED" && row.error_summary
+                    ? row.error_summary
+                    : duration(row.started_at, row.finished_at),
+              },
+            ]}
+            rows={runs}
+            rowKey={(row) => row.id}
+          />
+        )}
+      </Section>
     </div>
   );
 }

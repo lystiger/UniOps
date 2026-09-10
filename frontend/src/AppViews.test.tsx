@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { DataView } from "./components/DataView";
@@ -37,6 +37,31 @@ const orders = [
   },
 ];
 
+const exceptionReport = { as_of: "2026-09-10", total: 0, groups: [] };
+const commercialOverview = {
+  from_date: null,
+  to_date: null,
+  sales: { document_count: 3, customer_count: 2, total: "1000000", vat_amount: "80000", undated_document_count: 0, by_month: [] },
+  purchases: { document_count: 1, supplier_count: 1, total: "400000", vat_amount: "32000", undated_document_count: 0, by_month: [] },
+  sales_minus_purchases: "600000",
+};
+const receivablesSummary = {
+  as_of: "2026-09-10",
+  from_date: null,
+  to_date: null,
+  total_invoiced: "1000000",
+  invoice_count: 3,
+  linked_invoice_count: 1,
+  unlinked_invoice_count: 2,
+  total_outstanding: null,
+  total_overdue: null,
+  unpaid_invoice_count: null,
+  overdue_invoice_count: null,
+  outstanding_status: "EasyBooks exposes no paid or outstanding amount on any observed sales document",
+  due_status: "EasyBooks exposes no due date on any observed sales document",
+  customers: [],
+};
+
 function mockApi() {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = typeof input === "string" ? input : (input as Request).url;
@@ -52,67 +77,61 @@ function mockApi() {
     if (url.includes("/api/products")) {
       return new Response(JSON.stringify([{ id: "prod-1", code: "P-01", name: "Parent Roll", unit: "kg" }]), { status: 200 });
     }
+    if (url.includes("/api/operations/exceptions")) {
+      return new Response(JSON.stringify(exceptionReport), { status: 200 });
+    }
+    if (url.includes("/api/analytics/overview")) {
+      return new Response(JSON.stringify(commercialOverview), { status: 200 });
+    }
+    if (url.includes("/api/analytics/sales")) {
+      return new Response(JSON.stringify(commercialOverview.sales), { status: 200 });
+    }
+    if (url.includes("/api/analytics/purchases")) {
+      return new Response(JSON.stringify(commercialOverview.purchases), { status: 200 });
+    }
+    if (url.includes("/api/analytics/receivables")) {
+      return new Response(JSON.stringify(receivablesSummary), { status: 200 });
+    }
+    if (url.includes("/api/sync-runs")) {
+      return new Response(JSON.stringify([]), { status: 200 });
+    }
     return new Response("{}", { status: 404 });
   });
 }
 
 afterEach(() => vi.restoreAllMocks());
 
-describe("Design System Views & Navigation", () => {
+describe("Navigation and page identity", () => {
   it("renders topbar branding and navigates across all operational views", async () => {
     mockApi();
     render(<App />);
 
-    // Brand and location
     expect(await screen.findByText("OPS")).toBeInTheDocument();
-    expect(screen.getByText("Hưng Yên · LIVE")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Order board" })).toBeInTheDocument();
+    // The redesigned nav has no facility badge or fabricated live status.
+    expect(screen.queryByText(/Hưng Yên/)).not.toBeInTheDocument();
+    expect(screen.queryByText("LIVE")).not.toBeInTheDocument();
 
-    // Switch to Overview
     fireEvent.click(screen.getByRole("button", { name: "Overview" }));
-    expect(await screen.findByRole("heading", { name: "Production overview" })).toBeInTheDocument();
-    expect(screen.getByText("01 / OPERATIONS · Executive snapshot")).toBeInTheDocument();
-    expect(screen.getByText("FACILITY STATUS")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument();
 
-    // Switch to Finance
     fireEvent.click(screen.getByRole("button", { name: "Finance" }));
-    expect(await screen.findByRole("heading", { name: "Financial ledger & reconciliation" })).toBeInTheDocument();
-    expect(screen.getByText("04 / FINANCE · EasyBooks ledger")).toBeInTheDocument();
-    expect(screen.getByText(/EasyBooks remains the sole financial authority/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Finance" })).toBeInTheDocument();
 
-    // Switch to Data
     fireEvent.click(screen.getByRole("button", { name: "Data" }));
-    expect(await screen.findByRole("heading", { name: "Data & synchronization pipelines" })).toBeInTheDocument();
-    expect(screen.getByText("05 / DATA · Pipeline & synchronization")).toBeInTheDocument();
-    expect(screen.getByText("Extract")).toBeInTheDocument();
-    expect(screen.getByText("Transform")).toBeInTheDocument();
-    expect(screen.getByText("Load")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Data" })).toBeInTheDocument();
+    expect(await screen.findByText("EasyBooks synchronization")).toBeInTheDocument();
 
-    // Switch to New order
     fireEvent.click(screen.getByRole("button", { name: "+ New order" }));
     expect(await screen.findByRole("heading", { name: "New order" })).toBeInTheDocument();
-    expect(screen.getByText("02 / SALES · Secretary intake")).toBeInTheDocument();
 
-    // Return to Order board
-    fireEvent.click(screen.getByRole("button", { name: "Order board" }));
+    fireEvent.click(screen.getByRole("button", { name: "Orders" }));
     expect(await screen.findByRole("heading", { name: "Order board" })).toBeInTheDocument();
   });
+});
 
-  it("renders DataView with pipeline stages and integration rules", () => {
-    render(<DataView />);
-    expect(screen.getByText("EasyBooks Enterprise Extraction Pipeline")).toBeInTheDocument();
-    expect(screen.getByText("MSSQL Read replica")).toBeInTheDocument();
-    expect(screen.getByText("Schema & decimal validation")).toBeInTheDocument();
-    expect(screen.getByText("UniOps operational DB")).toBeInTheDocument();
-  });
-
-  it("renders FinanceView with accounting policy notice", () => {
-    render(<FinanceView onNavigateOrders={() => undefined} />);
-    expect(screen.getByText(/Accounting System of Record principle/)).toBeInTheDocument();
-    expect(screen.getByText("Invoice Candidate Matching")).toBeInTheDocument();
-  });
-
-  it("renders OverviewView with live metrics", async () => {
+describe("OverviewView", () => {
+  it("shows real order counts and the commercial snapshot from analytics", async () => {
     mockApi();
     render(
       <OverviewView
@@ -122,8 +141,149 @@ describe("Design System Views & Navigation", () => {
         onSessionLost={() => undefined}
       />,
     );
-    expect(screen.getByText("01 / OPERATIONS · Executive snapshot")).toBeInTheDocument();
-    expect(screen.getByText("ACTIVE ORDERS")).toBeInTheDocument();
-    expect(screen.getByText("PRODUCING NOW")).toBeInTheDocument();
+
+    expect(await screen.findByText("Active orders")).toBeInTheDocument();
+    expect(screen.getAllByText("2").length).toBeGreaterThan(0); // 2 active orders
+    expect(await screen.findByText("Nothing needs attention.")).toBeInTheDocument();
+    expect(await screen.findByText(/1.000.000/)).toBeInTheDocument(); // sales total, vi-VN grouped
+  });
+
+  it("shows an API error distinctly, not a blank or a zero", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/orders")) return new Response("{}", { status: 500 });
+      return new Response("{}", { status: 404 });
+    });
+    render(
+      <OverviewView
+        onNavigateOrders={() => undefined}
+        onNewOrder={() => undefined}
+        canWrite={true}
+        onSessionLost={() => undefined}
+      />,
+    );
+    expect((await screen.findAllByText("Could not load orders.")).length).toBeGreaterThan(0);
+  });
+
+  it("returns to sign-in on a 401 from an analytics call", async () => {
+    const onSessionLost = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/analytics/overview")) {
+        return new Response(JSON.stringify({ detail: "sign in to use UniOps" }), { status: 401 });
+      }
+      if (url.includes("/api/orders")) return new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 });
+      if (url.includes("/api/operations/exceptions")) return new Response(JSON.stringify(exceptionReport), { status: 200 });
+      if (url.includes("/api/analytics/receivables")) return new Response(JSON.stringify(receivablesSummary), { status: 200 });
+      if (url.includes("/api/sync-runs")) return new Response(JSON.stringify([]), { status: 200 });
+      return new Response("{}", { status: 404 });
+    });
+    render(
+      <OverviewView
+        onNavigateOrders={() => undefined}
+        onNewOrder={() => undefined}
+        canWrite={true}
+        onSessionLost={onSessionLost}
+      />,
+    );
+    await waitFor(() => expect(onSessionLost).toHaveBeenCalled());
+  });
+});
+
+describe("FinanceView", () => {
+  it("renders sales data on the default tab", async () => {
+    mockApi();
+    render(<FinanceView onSessionLost={() => undefined} />);
+    expect(await screen.findByRole("tab", { name: "Sales" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findAllByText("Documents")).not.toHaveLength(0);
+    expect(screen.getAllByText(/1.000.000/).length).toBeGreaterThan(0);
+  });
+
+  it("renders purchase data on the purchases tab", async () => {
+    mockApi();
+    render(<FinanceView onSessionLost={() => undefined} />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Purchases" }));
+    expect(await screen.findByText("Suppliers")).toBeInTheDocument();
+    expect(screen.getAllByText(/400.000/).length).toBeGreaterThan(0);
+  });
+
+  it("never shows a null receivable outstanding balance as zero", async () => {
+    mockApi();
+    render(<FinanceView onSessionLost={() => undefined} />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Receivables" }));
+    expect(await screen.findByText(/Outstanding balance:/)).toHaveTextContent(
+      "EasyBooks exposes no paid or outstanding amount on any observed sales document",
+    );
+    expect(screen.queryByText("0 ₫")).not.toBeInTheDocument();
+  });
+
+  it("refetches analytics when the date filter changes", async () => {
+    const fetchMock = mockApi();
+    render(<FinanceView onSessionLost={() => undefined} />);
+    await screen.findAllByText("Documents");
+    fetchMock.mockClear();
+
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-01-01" } });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("from_date=2026-01-01"),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("shows a source-limitation error distinctly from an empty result", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/analytics/sales")) return new Response("{}", { status: 500 });
+      if (url.includes("/api/analytics/overview")) return new Response(JSON.stringify(commercialOverview), { status: 200 });
+      if (url.includes("/api/analytics/receivables")) return new Response(JSON.stringify(receivablesSummary), { status: 200 });
+      if (url.includes("/api/sync-runs")) return new Response(JSON.stringify([]), { status: 200 });
+      return new Response("{}", { status: 404 });
+    });
+    render(<FinanceView onSessionLost={() => undefined} />);
+    expect(await screen.findByText("Could not load EasyBooks sales data.")).toBeInTheDocument();
+  });
+});
+
+describe("DataView", () => {
+  it("renders real sync runs, not fabricated pipeline stages", async () => {
+    const runs = [
+      {
+        id: "run-1",
+        mode: "incremental",
+        from_date: null,
+        to_date: null,
+        started_at: "2026-09-09T15:44:00Z",
+        finished_at: "2026-09-09T15:44:12Z",
+        status: "SUCCEEDED",
+        documents_seen: 42,
+        documents_created: 2,
+        documents_updated: 1,
+        documents_unchanged: 39,
+        documents_failed: 0,
+        reconciliation_warnings: 0,
+        error_summary: null,
+      },
+    ];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/sync-runs")) return new Response(JSON.stringify(runs), { status: 200 });
+      return new Response("{}", { status: 404 });
+    });
+    render(<DataView onSessionLost={() => undefined} />);
+
+    expect(await screen.findByText("Last successful sync")).toBeInTheDocument();
+    expect(screen.getAllByText("Success").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("42").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Extract")).not.toBeInTheDocument();
+    expect(screen.queryByText("Transform")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty state when no sync has ever run, not a zeroed table", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify([]), { status: 200 }));
+    render(<DataView onSessionLost={() => undefined} />);
+    expect(await screen.findByText("No EasyBooks synchronization has run yet.")).toBeInTheDocument();
   });
 });

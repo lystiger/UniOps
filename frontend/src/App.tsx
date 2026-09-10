@@ -67,7 +67,6 @@ export default function App() {
                 <span className="brand-slash">/</span>
                 <span className="brand-ops-label">OPS</span>
               </span>
-              <small className="brand-site-caption">Hưng Yên · 07:00–18:00</small>
             </div>
           </button>
         </div>
@@ -85,17 +84,8 @@ export default function App() {
             type="button"
             onClick={() => setView("board")}
           >
-            Order board
+            Orders
           </button>
-          {writer && (
-            <button
-              className={view === "new" ? "nav-item active" : "nav-item"}
-              type="button"
-              onClick={() => setView("new")}
-            >
-              + New order
-            </button>
-          )}
           <button
             className={view === "finance" ? "nav-item active" : "nav-item"}
             type="button"
@@ -110,13 +100,18 @@ export default function App() {
           >
             Data
           </button>
+          {writer && (
+            <button
+              className={view === "new" ? "nav-item active" : "nav-item"}
+              type="button"
+              onClick={() => setView("new")}
+            >
+              + New order
+            </button>
+          )}
         </nav>
 
         <div className="topbar-actions">
-          <div className="site-badge" title="Facility status: Active production">
-            <span className="live-dot" aria-hidden="true" />
-            <span className="site-text">Hưng Yên · LIVE</span>
-          </div>
           <AccountMenu user={user} onSignedOut={handleSessionLost} />
         </div>
       </header>
@@ -147,10 +142,8 @@ export default function App() {
             onSessionLost={handleSessionLost}
           />
         )}
-        {view === "finance" && (
-          <FinanceView onNavigateOrders={() => setView("board")} />
-        )}
-        {view === "data" && <DataView />}
+        {view === "finance" && <FinanceView onSessionLost={handleSessionLost} />}
+        {view === "data" && <DataView onSessionLost={handleSessionLost} />}
       </main>
     </div>
   );

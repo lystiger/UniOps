@@ -1,12 +1,20 @@
 import type {
+  CommercialOverview,
   Customer,
+  CustomerReceivableDetail,
+  DateWindow,
+  ExceptionReport,
   InvoiceCandidate,
   NewOrderLine,
   Order,
   OrderAccounting,
   OrderList,
   OrderStatus,
+  PurchaseSummary,
+  Receivables,
   Product,
+  SalesSummary,
+  SyncRun,
   User,
 } from "./types";
 
@@ -33,6 +41,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
   return response.json() as Promise<T>;
+}
+
+/** Builds a query string from a date window, omitting anything unset. */
+function windowQuery(window: DateWindow & { as_of?: string } = {}): string {
+  const params = new URLSearchParams();
+  if (window.from_date) params.set("from_date", window.from_date);
+  if (window.to_date) params.set("to_date", window.to_date);
+  if (window.as_of) params.set("as_of", window.as_of);
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 export const api = {
@@ -95,4 +113,23 @@ export const api = {
     }),
   unlinkInvoice: (id: string, linkId: string) =>
     request<OrderAccounting>(`/api/orders/${id}/invoice-links/${linkId}`, { method: "DELETE" }),
+
+  // --- Analytics: read-only over the EasyBooks-derived accounting layer ---
+  analyticsOverview: (window?: DateWindow) =>
+    request<CommercialOverview>(`/api/analytics/overview${windowQuery(window)}`),
+  analyticsSales: (window?: DateWindow) =>
+    request<SalesSummary>(`/api/analytics/sales${windowQuery(window)}`),
+  analyticsPurchases: (window?: DateWindow) =>
+    request<PurchaseSummary>(`/api/analytics/purchases${windowQuery(window)}`),
+  analyticsReceivables: (window?: DateWindow & { as_of?: string }) =>
+    request<Receivables>(`/api/analytics/receivables${windowQuery(window)}`),
+  customerReceivable: (customerId: string, as_of?: string) =>
+    request<CustomerReceivableDetail>(
+      `/api/customers/${customerId}/receivables${windowQuery({ as_of })}`,
+    ),
+  exceptions: (limit = 50) =>
+    request<ExceptionReport>(`/api/operations/exceptions?limit=${limit}`),
+
+  // --- Synchronization: read-only EasyBooks ingestion history -------------
+  syncRuns: (limit = 20) => request<SyncRun[]>(`/api/sync-runs?limit=${limit}`),
 };
