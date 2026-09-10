@@ -220,6 +220,66 @@ describe("FinanceView", () => {
     expect(screen.queryByText("0 ₫")).not.toBeInTheDocument();
   });
 
+  it("only exposes receivable rows with a customer link as interactive", async () => {
+    const summaryWithCustomers = {
+      ...receivablesSummary,
+      customers: [
+        {
+          customer_id: "cust-1",
+          customer_code: "C-001",
+          customer_name: "Linked Customer",
+          invoice_count: 1,
+          total_invoiced: "600000",
+          oldest_invoice_date: "2026-09-01",
+          newest_invoice_date: "2026-09-01",
+          outstanding_amount: null,
+          overdue_amount: null,
+        },
+        {
+          customer_id: null,
+          customer_code: "UNLINKED",
+          customer_name: "Unlinked Customer",
+          invoice_count: 1,
+          total_invoiced: "400000",
+          oldest_invoice_date: "2026-09-02",
+          newest_invoice_date: "2026-09-02",
+          outstanding_amount: null,
+          overdue_amount: null,
+        },
+      ],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/analytics/receivables")) {
+        return new Response(JSON.stringify(summaryWithCustomers), { status: 200 });
+      }
+      if (url.includes("/api/analytics/overview")) {
+        return new Response(JSON.stringify(commercialOverview), { status: 200 });
+      }
+      if (url.includes("/api/analytics/sales")) {
+        return new Response(JSON.stringify(commercialOverview.sales), { status: 200 });
+      }
+      if (url.includes("/api/analytics/purchases")) {
+        return new Response(JSON.stringify(commercialOverview.purchases), { status: 200 });
+      }
+      if (url.includes("/api/sync-runs")) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      return new Response("{}", { status: 404 });
+    });
+
+    render(<FinanceView onSessionLost={() => undefined} />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Receivables" }));
+
+    const linkedRow = (await screen.findByText("Linked Customer")).closest("tr");
+    const unlinkedRow = screen.getByText("Unlinked Customer").closest("tr");
+    expect(linkedRow).toHaveAttribute("role", "button");
+    expect(linkedRow).toHaveAttribute("tabindex", "0");
+    expect(unlinkedRow).not.toHaveAttribute("role");
+    expect(unlinkedRow).not.toHaveAttribute("tabindex");
+    expect(unlinkedRow).not.toHaveClass("clickable");
+  });
+
   it("refetches analytics when the date filter changes", async () => {
     const fetchMock = mockApi();
     render(<FinanceView onSessionLost={() => undefined} />);

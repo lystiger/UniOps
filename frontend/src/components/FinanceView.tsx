@@ -255,7 +255,8 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
                   ]}
                   rows={receivables.data.customers}
                   rowKey={(row) => row.customer_code}
-                  onRowClick={(row) => row.customer_id && setDrilldownId(row.customer_id)}
+                  onRowClick={(row) => setDrilldownId(row.customer_id!)}
+                  isRowClickable={(row) => row.customer_id !== null}
                   rowLabel={(row) => t.finance.invoicesForCustomerRowAria(row.customer_name ?? row.customer_code)}
                 />
               )}

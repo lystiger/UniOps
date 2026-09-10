@@ -95,12 +95,14 @@ export function DataTable<T>({
   rows,
   rowKey,
   onRowClick,
+  isRowClickable,
   rowLabel,
 }: {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  isRowClickable?: (row: T) => boolean;
   rowLabel?: (row: T) => string;
 }) {
   return (
@@ -117,21 +119,21 @@ export function DataTable<T>({
         </thead>
         <tbody>
           {rows.map((row) => {
-            const clickable = Boolean(onRowClick);
+            const clickable = Boolean(onRowClick && (!isRowClickable || isRowClickable(row)));
             return (
               <tr
                 key={rowKey(row)}
                 className={clickable ? "clickable" : undefined}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onClick={clickable ? () => onRowClick?.(row) : undefined}
                 role={clickable ? "button" : undefined}
                 tabIndex={clickable ? 0 : undefined}
                 aria-label={clickable && rowLabel ? rowLabel(row) : undefined}
                 onKeyDown={
-                  onRowClick
+                  clickable
                     ? (event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
-                          onRowClick(row);
+                          onRowClick?.(row);
                         }
                       }
                     : undefined
