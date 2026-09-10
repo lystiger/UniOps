@@ -1,4 +1,6 @@
-.PHONY: install migrate api frontend test test-e2e test-pg lint build ci fixture-sync db-up db-down backup deploy
+.PHONY: install migrate api frontend test test-e2e test-pg lint build ci fixture-sync db-up db-down db-test-init db-test-reset backup deploy
+
+UNIOPS_DB_PASSWORD ?= $(shell grep '^UNIOPS_DB_PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 
 install:
 	uv sync --all-groups
@@ -22,9 +24,9 @@ test:
 test-e2e:
 	cd frontend && npx playwright test
 
-# The same suite against the deployment database. Needs `make db-up` first.
+# The same suite against the deployment database. Needs `make db-up` and `make db-test-init` first.
 test-pg:
-	UNIOPS_TEST_DATABASE_URL=postgresql+psycopg://uniops:$(UNIOPS_DB_PASSWORD)@127.0.0.1:5432/uniops \
+	UNIOPS_TEST_DATABASE_URL=postgresql+psycopg://uniops:$(UNIOPS_DB_PASSWORD)@127.0.0.1:5432/uniops_test \
 		uv run pytest
 
 lint:
@@ -49,6 +51,13 @@ db-up:
 
 db-down:
 	docker compose down
+
+db-test-init:
+	docker compose exec -T db psql -U uniops -d postgres -c "CREATE DATABASE uniops_test;" 2>/dev/null || true
+
+db-test-reset:
+	docker compose exec -T db psql -U uniops -d postgres -c "DROP DATABASE IF EXISTS uniops_test;"
+	docker compose exec -T db psql -U uniops -d postgres -c "CREATE DATABASE uniops_test;"
 
 backup:
 	scripts/backup.sh

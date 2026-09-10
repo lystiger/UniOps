@@ -3,12 +3,27 @@
 This is the operator's guide: accounts, the PostgreSQL deployment, and backups. It assumes UniOps runs on one internal machine that the office and
 the factory floor can reach, and that nothing about it is published.
 
-## What v0.1.1 changed
+## System Boundaries & Authority
 
-- Every API route now requires a signed-in account. There is no anonymous read.
-- PostgreSQL is the supported deployment database. SQLite remains the local
-  development and test default.
-- `uniops migrate-db` copies an existing SQLite database into PostgreSQL.
+### What EasyBooks owns
+- **Official accounting books & ledgers**: EasyBooks is the authoritative system of record for accounting.
+- **Invoices, taxes, and accounting documents**: All sales invoices, purchase reports, and VAT amounts originate from EasyBooks.
+- **Official partner records**: Customers and vendors defined in accounting.
+- **Financial truth**: UniOps never creates, edits, or deletes records in EasyBooks.
+
+### What UniOps owns
+- **Operational orders & lifecycle**: Customer order intake, order lines, and status transitions through factory floor to delivery.
+- **Order-to-invoice reconciliation metadata**: Scored candidate matching, linkage records, and link provenance.
+- **Read-only replicas & data lineage**: Immutable raw payload audit trail (`easybooks_raw_records`) and staging tables.
+- **Operational analytics & dashboards**: Read models computed on-demand for operational oversight.
+
+See also:
+- [Internal Pilot Testing Checklist](human-pilot-checklist.md)
+- [Finance & Accounting Policy Questions](finance-validation-questions.md)
+
+## Development and Deployment Baseline
+
+PostgreSQL 17 is the normal integrated development target and the production baseline. SQLite remains supported for fast unit tests and isolated local checks.
 
 ## Accounts and roles
 

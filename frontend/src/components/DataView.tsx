@@ -67,11 +67,17 @@ export function DataView({ onSessionLost }: { onSessionLost: () => void }) {
               },
               { key: "rows", header: "Rows", align: "right", render: (row: SyncRun) => number(row.documents_seen) },
               {
+                key: "warnings",
+                header: "Warnings",
+                align: "right",
+                render: (row: SyncRun) => (row.reconciliation_warnings > 0 ? `${number(row.reconciliation_warnings)}` : "0"),
+              },
+              {
                 key: "duration",
-                header: "Duration / error",
+                header: "Duration / details",
                 render: (row: SyncRun) =>
-                  row.status === "FAILED" && row.error_summary
-                    ? row.error_summary
+                  row.error_summary
+                    ? `${duration(row.started_at, row.finished_at)} (${row.error_summary})`
                     : duration(row.started_at, row.finished_at),
               },
             ]}

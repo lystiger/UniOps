@@ -12,11 +12,58 @@ from app.main import app
 from app.models import UserRole
 from app.services import auth
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 # Read before the autouse fixture below strips UNIOPS_* from the environment.
 # Point it at a PostgreSQL URL to run the same suite against the deploy target.
 TEST_DATABASE_URL = os.environ.get("UNIOPS_TEST_DATABASE_URL")
+NORMAL_DATABASE_URL = os.environ.get("UNIOPS_DATABASE_URL")
+
+
+def validate_test_database_url(
+    test_url_str: str | None, normal_url_str: str | None
+) -> None:
+    if not test_url_str:
+        return
+    try:
+        test_url = make_url(test_url_str)
+    except Exception as exc:
+        raise pytest.UsageError(
+            f"Invalid UNIOPS_TEST_DATABASE_URL '{test_url_str}': {exc}"
+        ) from exc
+
+    if normal_url_str:
+        try:
+            normal_url = make_url(normal_url_str)
+            if (
+                test_url.host == normal_url.host
+                and test_url.port == normal_url.port
+                and test_url.database == normal_url.database
+            ):
+                raise pytest.UsageError(
+                    f"Refusing to run tests: UNIOPS_TEST_DATABASE_URL matches UNIOPS_DATABASE_URL "
+                    f"('{test_url.database}'). The test suite calls Base.metadata.drop_all(), "
+                    "which would destroy development or production data. "
+                    "Use a dedicated test database (e.g. 'uniops_test')."
+                )
+        except pytest.UsageError:
+            raise
+        except Exception:
+            pass
+
+    backend_name = test_url.get_backend_name()
+    db_name = (test_url.database or "").strip("/").lower()
+    if backend_name in ("postgresql", "postgres"):
+        if db_name in ("uniops", "postgres", "production", "prod") or "test" not in db_name:
+            raise pytest.UsageError(
+                f"Refusing to run tests against database '{test_url.database}'. "
+                "UNIOPS_TEST_DATABASE_URL must point to a dedicated test database containing "
+                "'test' (e.g. 'uniops_test') because test setup drops all tables."
+            )
+
+
+validate_test_database_url(TEST_DATABASE_URL, NORMAL_DATABASE_URL)
 
 
 @pytest.fixture(autouse=True)

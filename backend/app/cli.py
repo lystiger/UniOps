@@ -13,6 +13,7 @@ from app.integrations.easybooks.client import (
     EasyBooksClient,
     EasyBooksConfigurationError,
     HttpxReadOnlyTransport,
+    business_today,
 )
 from app.integrations.easybooks.sync import FixtureBundle, fetch_live_bundle, sync_bundle
 from app.services import auth
@@ -183,7 +184,7 @@ def main() -> None:
         parser.error("--headers-only applies to --live reads")
 
     settings = get_settings()
-    to_date = args.to_date or date.today()
+    to_date = args.to_date or business_today()
     from_date = args.from_date or (to_date - timedelta(days=settings.easybooks_sync_overlap_days))
     if args.fixture:
         payload = json.loads(args.fixture.read_text())

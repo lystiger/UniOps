@@ -131,6 +131,8 @@ def create_order(session: Session, data: OrderCreate) -> Order:
 
 def update_order(session: Session, order_id: str, data: OrderUpdate) -> Order:
     order = get_order(session, order_id)
+    if order.status in {OrderStatus.CLOSED, OrderStatus.CANCELLED}:
+        raise OrderValidationError(f"cannot update a {order.status.value} order")
     updates = data.model_dump(exclude_unset=True)
     customer_id = updates.get("customer_id")
     if customer_id:

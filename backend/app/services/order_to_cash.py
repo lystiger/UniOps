@@ -35,6 +35,7 @@ from app.models import (
     LinkMethod,
     Order,
     OrderAccountingLink,
+    OrderStatus,
     SalesDocument,
     User,
 )
@@ -268,6 +269,8 @@ def create_link(
     The evidence is recomputed for the chosen pair and stored with it, so a link
     that a person made against weak evidence still says so afterwards.
     """
+    if order.status == OrderStatus.CANCELLED:
+        raise LinkError("cannot link an invoice to a cancelled order")
     document = session.get(SalesDocument, sales_document_id)
     if document is None:
         raise LinkNotFound("sales document not found")

@@ -579,3 +579,15 @@ def test_a_corrected_invoice_updates_the_receivable_without_relinking(session, o
 )
 def test_the_new_read_models_expose_no_write_route(client, path):
     assert client.post(path, json={}).status_code == 405
+
+
+def test_cannot_link_invoice_to_cancelled_order(session, office_client):
+    order, document = _linkable(session)
+    order.status = OrderStatus.CANCELLED
+    session.commit()
+
+    response = office_client.post(
+        f"/api/orders/{order.id}/invoice-links", json={"sales_document_id": document.id}
+    )
+    assert response.status_code == 409
+    assert "cannot link an invoice to a cancelled order" in response.json()["detail"]

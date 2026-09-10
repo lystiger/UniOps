@@ -115,3 +115,14 @@ def test_add_update_and_remove_lines(client):
     only_line_id = removed.json()["lines"][0]["id"]
     cannot_remove_last = client.delete(f"/api/orders/{order['id']}/lines/{only_line_id}")
     assert cannot_remove_last.status_code == 422
+
+
+def test_cannot_update_closed_or_cancelled_order(client):
+    customer, product = _catalog(client)
+    order = client.post("/api/orders", json=_order_payload(customer["id"], product["id"])).json()
+    cancelled = client.post(f"/api/orders/{order['id']}/status", json={"status": "CANCELLED"})
+    assert cancelled.status_code == 200
+
+    cannot_update = client.patch(f"/api/orders/{order['id']}", json={"notes": "Illegal edit"})
+    assert cannot_update.status_code == 422
+    assert "cannot update a CANCELLED order" in cannot_update.json()["detail"]

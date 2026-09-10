@@ -37,6 +37,15 @@ const nextLabel: Partial<Record<OrderStatus, string>> = {
   INVOICED: "Close order",
 };
 
+const cancellableStatuses: OrderStatus[] = [
+  "DRAFT",
+  "CONFIRMED",
+  "SCHEDULED",
+  "IN_PRODUCTION",
+  "READY",
+  "DELIVERY_PENDING",
+];
+
 function formatDue(value: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short" }).format(
     new Date(`${value}T00:00:00`),
@@ -129,6 +138,24 @@ export function OrderBoard({
     }
   }
 
+  async function cancelOrder(order: Order) {
+    if (!window.confirm(`Cancel order ${order.order_number}? This cannot be undone.`)) return;
+    setMovingId(order.id);
+    setError("");
+    try {
+      await api.changeStatus(order.id, "CANCELLED");
+      setOrders((items) => items.filter((item) => item.id !== order.id));
+    } catch (reason) {
+      if (reason instanceof UnauthorizedError) {
+        onSessionLost();
+        return;
+      }
+      setError(reason instanceof Error ? reason.message : "Order was not cancelled");
+    } finally {
+      setMovingId("");
+    }
+  }
+
   return (
     <section className="board-page">
       <div className="page-heading">
@@ -196,6 +223,17 @@ export function OrderBoard({
                           onClick={() => advance(order)}
                         >
                           {movingId === order.id ? "Updating…" : nextLabel[order.status]}
+                        </button>
+                      )}
+                      {canWrite && cancellableStatuses.includes(order.status) && (
+                        <button
+                          className="cancel-order-button"
+                          type="button"
+                          disabled={movingId === order.id}
+                          onClick={() => cancelOrder(order)}
+                          aria-label={`Cancel order ${order.order_number}`}
+                        >
+                          Cancel order
                         </button>
                       )}
                     </article>

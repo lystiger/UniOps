@@ -26,3 +26,5 @@ frontend/blob-report/
 frontend/playwright/.cache/
 frontend/.playwright/
 frontend/ms-playwright/
+.playwright-cli/
+backups/

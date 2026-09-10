@@ -159,10 +159,12 @@ def fetch_live_bundle(
     documents, warnings = fetch_sales_documents(client, from_date, to_date)
     sales_lines: dict[str, list[dict[str, Any]]] = {}
     if include_lines:
-        sales_lines = {
-            str(document["id"]): _extract_rows(client.sales_lines(str(document["id"])))
-            for document in documents
-        }
+        for document in documents:
+            doc_id = str(document.get("id", ""))
+            try:
+                sales_lines[doc_id] = _extract_rows(client.sales_lines(doc_id))
+            except Exception as exc:
+                warnings.append(f"sales detail unavailable for document {doc_id}: {exc}")
     else:
         warnings.append("sales details were not retrieved; existing normalized lines are kept")
     try:
@@ -461,56 +463,74 @@ def sync_bundle(
             extra={"sync_run_id": run.id, "source": "easybooks", "entity_type": "purchase_report"},
         )
 
-    grouped_purchases = group_purchase_rows(bundle.purchase_rows)
-    work: list[tuple[str, Any]] = [("sales", source) for source in bundle.sales_documents] + [
-        ("purchase", (source_id, rows)) for source_id, rows in grouped_purchases.items()
-    ]
-    run.documents_seen = len(work)
-    for entity_type, item in work:
-        try:
-            with session.begin_nested():
-                if entity_type == "sales":
-                    source_id = str(item.get("id", "missing"))
-                    outcome, warning_count = _upsert_sales(
-                        session,
-                        run,
-                        item,
-                        bundle.sales_lines.get(source_id, []),
-                        lines_available=bundle.sales_lines_available,
-                    )
-                    run.reconciliation_warnings += warning_count
-                else:
-                    source_id, rows = item
-                    outcome = _upsert_purchase(session, run, source_id, rows)
-                if outcome == "created":
-                    run.documents_created += 1
-                elif outcome == "updated":
-                    run.documents_updated += 1
-                else:
-                    run.documents_unchanged += 1
-        except Exception as exc:  # each source document is independently auditable
-            run.documents_failed += 1
-            logger.exception(
-                "EasyBooks document sync failed",
-                extra={
-                    "sync_run_id": run.id,
-                    "entity_type": entity_type,
-                    "source_id": source_id,
-                },
-            )
-            run.error_summary = str(exc)[:2000]
+    errors: list[str] = []
+    try:
+        grouped_purchases = group_purchase_rows(bundle.purchase_rows)
+        work: list[tuple[str, Any]] = [("sales", source) for source in bundle.sales_documents] + [
+            ("purchase", (source_id, rows)) for source_id, rows in grouped_purchases.items()
+        ]
+        run.documents_seen = len(work)
+        for entity_type, item in work:
+            try:
+                with session.begin_nested():
+                    if entity_type == "sales":
+                        source_id = str(item.get("id", "missing"))
+                        outcome, warning_count = _upsert_sales(
+                            session,
+                            run,
+                            item,
+                            bundle.sales_lines.get(source_id, []),
+                            lines_available=bundle.sales_lines_available,
+                        )
+                        run.reconciliation_warnings += warning_count
+                    else:
+                        source_id, rows = item
+                        outcome = _upsert_purchase(session, run, source_id, rows)
+                    if outcome == "created":
+                        run.documents_created += 1
+                    elif outcome == "updated":
+                        run.documents_updated += 1
+                    else:
+                        run.documents_unchanged += 1
+            except Exception as exc:  # each source document is independently auditable
+                run.documents_failed += 1
+                logger.exception(
+                    "EasyBooks document sync failed",
+                    extra={
+                        "sync_run_id": run.id,
+                        "entity_type": entity_type,
+                        "source_id": source_id,
+                    },
+                )
+                errors.append(f"{entity_type} {source_id}: {exc}")
 
-    # Validate/reconcile: what was just published must hold together, whatever
-    # the source said. Breaks are reported, never silently accepted.
-    for warning in check_integrity(session).warnings:
-        run.reconciliation_warnings += 1
-        logger.warning(
-            warning,
-            extra={"sync_run_id": run.id, "source": "easybooks", "entity_type": "integrity"},
-        )
+        # Validate/reconcile: what was just published must hold together, whatever
+        # the source said. Breaks are reported, never silently accepted.
+        for warning in check_integrity(session).warnings:
+            run.reconciliation_warnings += 1
+            logger.warning(
+                warning,
+                extra={"sync_run_id": run.id, "source": "easybooks", "entity_type": "integrity"},
+            )
+    except Exception as fatal_exc:
+        run.finished_at = utc_now()
+        run.status = SyncStatus.FAILED
+        run.error_summary = f"Fatal sync error: {fatal_exc}"[:2000]
+        session.commit()
+        raise
+
+    if errors:
+        run.error_summary = "; ".join(errors)[:2000]
 
     run.finished_at = utc_now()
-    run.status = SyncStatus.PARTIAL if run.documents_failed else SyncStatus.SUCCEEDED
+    if run.documents_failed > 0 and (
+        run.documents_created + run.documents_updated + run.documents_unchanged == 0
+    ):
+        run.status = SyncStatus.FAILED
+    elif run.documents_failed > 0:
+        run.status = SyncStatus.PARTIAL
+    else:
+        run.status = SyncStatus.SUCCEEDED
     session.commit()
     logger.info(
         "EasyBooks sync finished",
