@@ -1,10 +1,11 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import read_access, write_access
 from app.database import get_db
+from app.errors import ApiError
 from app.schemas import (
     CustomerCreate,
     CustomerRead,
@@ -33,7 +34,12 @@ async def create_customer(data: CustomerCreate, session: Session = Depends(get_d
     try:
         return catalog.create_customer(session, data)
     except catalog.CatalogConflict as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+            code=getattr(exc, "code", "CUSTOMER_CODE_EXISTS"),
+            params=getattr(exc, "params", {}),
+        ) from exc
 
 
 @router.get("/products", response_model=list[ProductRead], dependencies=[read_access])
@@ -52,7 +58,12 @@ async def create_product(data: ProductCreate, session: Session = Depends(get_db)
     try:
         return catalog.create_product(session, data)
     except catalog.CatalogConflict as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+            code=getattr(exc, "code", "PRODUCT_CODE_EXISTS"),
+            params=getattr(exc, "params", {}),
+        ) from exc
 
 
 @router.get(
@@ -69,4 +80,9 @@ async def customer_receivables(
     try:
         return analytics.customer_receivable(session, customer_id, as_of)
     except analytics.CustomerNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+            code=getattr(exc, "code", "CUSTOMER_NOT_FOUND"),
+            params=getattr(exc, "params", {}),
+        ) from exc

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -40,17 +41,51 @@ ROLE_BY_CLI_NAME = {
 class AuthError(Exception):
     """The credential or session presented cannot be accepted."""
 
+    def __init__(
+        self,
+        message: str = "invalid username or password",
+        code: str = "INVALID_CREDENTIALS",
+        params: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
 
 class UserExists(Exception):
-    pass
+    def __init__(
+        self,
+        message: str = "user already exists",
+        code: str = "USER_EXISTS",
+        params: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 class UserNotFound(Exception):
-    pass
+    def __init__(
+        self,
+        message: str = "user not found",
+        code: str = "USER_NOT_FOUND",
+        params: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 class WeakPassword(Exception):
-    pass
+    def __init__(
+        self,
+        message: str = "password must be at least 12 characters",
+        code: str = "WEAK_PASSWORD",
+        params: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 @dataclass(frozen=True)
@@ -67,7 +102,11 @@ def normalize_username(username: str) -> str:
 
 def _require_strong(password: str) -> None:
     if len(password) < MIN_PASSWORD_LENGTH:
-        raise WeakPassword(f"password must be at least {MIN_PASSWORD_LENGTH} characters")
+        raise WeakPassword(
+            f"password must be at least {MIN_PASSWORD_LENGTH} characters",
+            code="WEAK_PASSWORD",
+            params={"min_length": MIN_PASSWORD_LENGTH},
+        )
 
 
 def get_user(session: Session, username: str) -> User | None:
@@ -88,10 +127,14 @@ def create_user(
 ) -> User:
     name = normalize_username(username)
     if not name:
-        raise UserNotFound("username is required")
+        raise UserNotFound("username is required", code="USERNAME_REQUIRED")
     _require_strong(password)
     if get_user(session, name) is not None:
-        raise UserExists(f"user {name} already exists")
+        raise UserExists(
+            f"user {name} already exists",
+            code="USER_EXISTS",
+            params={"username": name},
+        )
     user = User(
         username=name,
         full_name=full_name,
@@ -109,7 +152,11 @@ def set_password(session: Session, username: str, password: str) -> User:
     _require_strong(password)
     user = get_user(session, username)
     if user is None:
-        raise UserNotFound(f"user {normalize_username(username)} does not exist")
+        raise UserNotFound(
+            f"user {normalize_username(username)} does not exist",
+            code="USER_NOT_FOUND",
+            params={"username": normalize_username(username)},
+        )
     user.password_hash = hash_password(password)
     # A password change ends every signed-in browser for that account. That is
     # the point of changing it after a suspected leak.
@@ -122,7 +169,11 @@ def set_password(session: Session, username: str, password: str) -> User:
 def set_active(session: Session, username: str, active: bool) -> User:
     user = get_user(session, username)
     if user is None:
-        raise UserNotFound(f"user {normalize_username(username)} does not exist")
+        raise UserNotFound(
+            f"user {normalize_username(username)} does not exist",
+            code="USER_NOT_FOUND",
+            params={"username": normalize_username(username)},
+        )
     user.is_active = active
     if not active:
         revoke_all_sessions(session, user)
@@ -135,13 +186,13 @@ def authenticate(session: Session, username: str, password: str) -> User:
     user = get_user(session, username)
     if user is None:
         spend_dummy_verification()
-        raise AuthError("username or password is not correct")
+        raise AuthError("username or password is not correct", code="INVALID_CREDENTIALS")
     if not verify_password(user.password_hash, password):
-        raise AuthError("username or password is not correct")
+        raise AuthError("username or password is not correct", code="INVALID_CREDENTIALS")
     if not user.is_active:
         # Reported separately only after the password checked out, so a disabled
         # account is never revealed to someone who does not hold its password.
-        raise AuthError("this account is disabled")
+        raise AuthError("this account is disabled", code="ACCOUNT_DISABLED")
     if needs_rehash(user.password_hash):
         user.password_hash = hash_password(password)
     user.last_login_at = datetime.now(UTC)

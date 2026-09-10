@@ -6,11 +6,12 @@ matching the existing rule that reading is what `factory-read` is for.
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import read_access
 from app.database import get_db
+from app.errors import ApiError
 from app.schemas import (
     CommercialOverviewRead,
     PurchaseSummaryRead,
@@ -30,8 +31,11 @@ def _window(from_date: date | None, to_date: date | None) -> None:
     try:
         analytics.check_window(from_date, to_date)
     except analytics.InvalidDateWindow as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        raise ApiError(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+            code=getattr(exc, "code", "INVALID_DATE_WINDOW"),
+            params=getattr(exc, "params", {}),
         ) from exc
 
 

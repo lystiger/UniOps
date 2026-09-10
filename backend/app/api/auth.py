@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import admin_access, current_user
 from app.config import Settings, get_settings
 from app.database import get_db
+from app.errors import ApiError
 from app.models import User
 from app.schemas import LoginRequest, PasswordChange, UserRead
 from app.services import auth
@@ -36,7 +37,12 @@ async def login(
     try:
         user = auth.authenticate(session, data.username, data.password)
     except auth.AuthError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+        raise ApiError(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            code=getattr(exc, "code", "INVALID_CREDENTIALS"),
+            params=getattr(exc, "params", {}),
+        ) from exc
     issued = auth.start_session(session, user, settings.session_lifetime_hours)
     _set_session_cookie(response, settings, issued.token)
     return user
@@ -71,14 +77,19 @@ async def change_password(
     try:
         auth.authenticate(session, user.username, data.current_password)
     except auth.AuthError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="current password is not correct"
+        raise ApiError(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="current password is not correct",
+            code="INVALID_CURRENT_PASSWORD",
         ) from exc
     try:
         updated = auth.set_password(session, user.username, data.new_password)
     except auth.WeakPassword as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        raise ApiError(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+            code=getattr(exc, "code", "WEAK_PASSWORD"),
+            params=getattr(exc, "params", {}),
         ) from exc
     # set_password ends every session for the account, including this browser's.
     # Issuing a fresh one keeps the person who just changed their own password

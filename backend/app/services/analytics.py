@@ -23,6 +23,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -34,6 +35,16 @@ ZERO = Decimal("0")
 
 class InvalidDateWindow(ValueError):
     """The requested window cannot contain anything."""
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "INVALID_DATE_WINDOW",
+        params: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 @dataclass(frozen=True)
@@ -75,7 +86,9 @@ class CommercialOverview:
 def check_window(from_date: date | None, to_date: date | None) -> None:
     if from_date and to_date and from_date > to_date:
         raise InvalidDateWindow(
-            f"from_date {from_date} is after to_date {to_date}; that window holds nothing"
+            f"from_date {from_date} is after to_date {to_date}; that window holds nothing",
+            code="INVALID_DATE_WINDOW",
+            params={"from_date": str(from_date), "to_date": str(to_date)},
         )
 
 
@@ -373,7 +386,15 @@ class CustomerReceivableDetail:
 
 
 class CustomerNotFound(LookupError):
-    pass
+    def __init__(
+        self,
+        message: str = "customer not found",
+        code: str = "CUSTOMER_NOT_FOUND",
+        params: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 def customer_receivable(
@@ -395,7 +416,11 @@ def customer_receivable(
 
     customer = session.get(Customer, customer_id)
     if customer is None:
-        raise CustomerNotFound("customer not found")
+        raise CustomerNotFound(
+            "customer not found",
+            code="CUSTOMER_NOT_FOUND",
+            params={"customer_id": customer_id},
+        )
     as_of = as_of or date.today()
     code = customer.easybooks_accounting_object_code
 

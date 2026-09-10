@@ -78,11 +78,27 @@ class DueStatus(StrEnum):
 
 
 class LinkError(ValueError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        code: str = "LINK_ERROR",
+        params: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 class LinkNotFound(LookupError):
-    pass
+    def __init__(
+        self,
+        message: str = "link not found",
+        code: str = "LINK_NOT_FOUND",
+        params: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 # Stated once, used everywhere a payment-derived figure would otherwise be
@@ -270,10 +286,13 @@ def create_link(
     that a person made against weak evidence still says so afterwards.
     """
     if order.status == OrderStatus.CANCELLED:
-        raise LinkError("cannot link an invoice to a cancelled order")
+        raise LinkError(
+            "cannot link an invoice to a cancelled order",
+            code="CANNOT_LINK_CANCELLED_ORDER",
+        )
     document = session.get(SalesDocument, sales_document_id)
     if document is None:
-        raise LinkNotFound("sales document not found")
+        raise LinkNotFound("sales document not found", code="SALES_DOCUMENT_NOT_FOUND")
     existing = session.scalar(
         select(OrderAccountingLink).where(
             OrderAccountingLink.order_id == order.id,
@@ -281,7 +300,10 @@ def create_link(
         )
     )
     if existing is not None:
-        raise LinkError("this order is already linked to that invoice")
+        raise LinkError(
+            "this order is already linked to that invoice",
+            code="INVOICE_ALREADY_LINKED",
+        )
 
     evidence = _evidence(order, document)
     evidence["customer_code_match"] = (
@@ -311,7 +333,7 @@ def delete_link(session: Session, order: Order, link_id: str) -> None:
         )
     )
     if link is None:
-        raise LinkNotFound("link not found for this order")
+        raise LinkNotFound("link not found for this order", code="LINK_NOT_FOUND")
     session.delete(link)
     session.commit()
 

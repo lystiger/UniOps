@@ -6,11 +6,12 @@ account, `write_access` narrows to the roles that may change data, and
 from a menu: the check is on the route.
 """
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_db
+from app.errors import ApiError
 from app.models import User, UserRole
 from app.services import auth
 
@@ -22,8 +23,10 @@ async def current_user(request: Request, session: Session = Depends(get_db)) -> 
     token = request.cookies.get(settings.session_cookie_name, "")
     user = auth.resolve_session(session, token)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="sign in to use UniOps"
+        raise ApiError(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="sign in to use UniOps",
+            code="AUTH_REQUIRED",
         )
     return user
 
@@ -33,9 +36,11 @@ def require_roles(*roles: UserRole):
 
     async def dependency(user: User = Depends(current_user)) -> User:
         if user.role not in allowed:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"the {user.role.value} role may not perform this action",
+                code="PERMISSION_DENIED",
+                params={"role": user.role.value},
             )
         return user
 

@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -7,7 +9,15 @@ from app.schemas import CustomerCreate, ProductCreate
 
 
 class CatalogConflict(ValueError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        code: str = "CATALOG_CONFLICT",
+        params: dict[str, Any] | None = None,
+    ):
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 def create_customer(session: Session, data: CustomerCreate) -> Customer:
@@ -17,7 +27,10 @@ def create_customer(session: Session, data: CustomerCreate) -> Customer:
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise CatalogConflict("customer source code or source ID already exists") from exc
+        raise CatalogConflict(
+            "customer source code or source ID already exists",
+            code="CUSTOMER_CODE_EXISTS",
+        ) from exc
     session.refresh(customer)
     return customer
 
@@ -43,7 +56,10 @@ def create_product(session: Session, data: ProductCreate) -> Product:
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        raise CatalogConflict("product code or EasyBooks material ID already exists") from exc
+        raise CatalogConflict(
+            "product code or EasyBooks material ID already exists",
+            code="PRODUCT_CODE_EXISTS",
+        ) from exc
     session.refresh(product)
     return product
 

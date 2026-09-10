@@ -1,8 +1,11 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.analytics import router as analytics_router
@@ -13,6 +16,7 @@ from app.api.operations import router as operations_router
 from app.api.orders import router as orders_router
 from app.api.sync_runs import router as sync_runs_router
 from app.config import get_settings
+from app.errors import ApiError
 from app.logging_config import configure_logging
 
 VERSION = "0.1.4"
@@ -31,6 +35,34 @@ app = FastAPI(
     description="Operational system of record for UniGreen. EasyBooks remains accounting SoR.",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(ApiError)
+async def api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "code": exc.code, "params": exc.params},
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={"detail": jsonable_encoder(exc.errors()), "code": "REQUEST_INVALID", "params": {}},
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
+    code = getattr(exc, "code", "HTTP_ERROR")
+    params = getattr(exc, "params", {})
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "code": code, "params": params},
+        headers=exc.headers,
+    )
 
 settings = get_settings()
 app.add_middleware(

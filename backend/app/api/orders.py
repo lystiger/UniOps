@@ -1,10 +1,11 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import WRITE_ROLES, read_access, require_roles, write_access
 from app.database import get_db
+from app.errors import ApiError
 from app.models import OrderStatus, User
 from app.schemas import (
     InvoiceCandidateRead,
@@ -23,12 +24,23 @@ from app.services import order_to_cash, orders
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
-def _translate_error(exc: Exception) -> HTTPException:
+def _translate_error(exc: Exception) -> ApiError:
+    code = getattr(exc, "code", "ORDER_ERROR")
+    params = getattr(exc, "params", {})
     if isinstance(exc, orders.OrderNotFound):
-        return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        return ApiError(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc), code=code, params=params
+        )
     if isinstance(exc, orders.OrderConflictError):
-        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc))
+        return ApiError(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc), code=code, params=params
+        )
+    return ApiError(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=str(exc),
+        code=code,
+        params=params,
+    )
 
 
 @router.get("", response_model=OrderList, dependencies=[read_access])
@@ -136,7 +148,12 @@ def _order_or_404(session: Session, order_id: str):
     try:
         return orders.get_order(session, order_id)
     except orders.OrderNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+            code=getattr(exc, "code", "ORDER_NOT_FOUND"),
+            params={"order_id": order_id},
+        ) from exc
 
 
 @router.get(
@@ -177,10 +194,18 @@ async def create_invoice_link(
     try:
         order_to_cash.create_link(session, order, data.sales_document_id, user)
     except order_to_cash.LinkNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+            code=getattr(exc, "code", "SALES_DOCUMENT_NOT_FOUND"),
+            params=getattr(exc, "params", {}),
+        ) from exc
     except order_to_cash.LinkError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        raise ApiError(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+            code=getattr(exc, "code", "LINK_ERROR"),
+            params=getattr(exc, "params", {}),
         ) from exc
     return order_to_cash.accounting_for(session, order)
 
@@ -197,5 +222,10 @@ async def delete_invoice_link(
     try:
         order_to_cash.delete_link(session, order, link_id)
     except order_to_cash.LinkNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+            code=getattr(exc, "code", "LINK_NOT_FOUND"),
+            params=getattr(exc, "params", {}),
+        ) from exc
     return order_to_cash.accounting_for(session, order)
