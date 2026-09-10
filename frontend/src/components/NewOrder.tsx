@@ -99,10 +99,7 @@ export function NewOrder({
     <section className="new-order-page">
       <div className="page-heading compact">
         <div>
-          <p className="eyebrow">02 / SALES · Secretary intake</p>
           <h1>New order</h1>
-          <p className="heading-sub">Tiếp nhận đơn hàng mới</p>
-          <p className="heading-meta">Capture what the customer needs. Production planning comes next.</p>
         </div>
       </div>
 
@@ -236,9 +233,7 @@ function QuickCatalog({ customers, products, reload }: { customers: Customer[]; 
 
   return (
     <aside className="catalog-panel">
-      <p className="eyebrow">02 / CATALOG · Quick setup</p>
       <h2>Catalog</h2>
-      <p className="heading-sub">Danh mục khách &amp; sản phẩm</p>
       <p>{customers.length} customers · {products.length} products</p>
       {message && <div className="message success" role="status">{message}</div>}
       {failure && <div className="message error" role="alert">{failure}</div>}

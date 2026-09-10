@@ -35,7 +35,6 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
             Uni<span className="brand-green-accent">-Green</span> <span className="brand-ops-slash">/</span> <span className="brand-ops-label">OPS</span>
           </span>
         </div>
-        <p className="eyebrow sign-in-eyebrow">00 / AUTHENTICATION · INTERNAL ACCESS</p>
         <h1>UniOps</h1>
         <p className="sign-in-lead">Sign in to reach the order desk &amp; factory operations.</p>
         {error && (

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, UnauthorizedError } from "../api";
+import { money } from "../format";
 import type { AccountingStatus, InvoiceCandidate, Order, OrderAccounting } from "../types";
 
 const accountingMeta: Record<
@@ -41,11 +42,6 @@ export function AccountingBadge({ status }: { status: AccountingStatus | null })
       <span>{meta.label}</span>
     </span>
   );
-}
-
-function money(value: string | null) {
-  if (value === null) return "—";
-  return new Intl.NumberFormat("vi-VN").format(Number(value));
 }
 
 export function AccountingPanel({
@@ -111,7 +107,6 @@ export function AccountingPanel({
       <div className="accounting-panel">
         <header>
           <div>
-            <p className="eyebrow">04 / FINANCE · Order to cash</p>
             <h2>{order.order_number}</h2>
           </div>
           <button className="secondary-button" type="button" onClick={onClose}>

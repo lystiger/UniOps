@@ -200,14 +200,6 @@ a:focus-visible {
   color: var(--ink-muted);
 }
 
-.brand-site-caption {
-  font-family: var(--font-compact);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: var(--ink-muted);
-  margin-top: 1px;
-}
-
 /* Navigation items */
 .topbar-nav {
   display: flex;
@@ -257,21 +249,6 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 14px;
-}
-
-.site-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 10px;
-  border-radius: var(--radius-control);
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  font-family: var(--font-compact);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--ink);
 }
 
 .live-dot {
@@ -392,45 +369,29 @@ main {
   max-width: 840px;
 }
 
-.eyebrow {
-  margin: 0 0 6px;
-  color: var(--brand-green);
-  font-family: var(--font-compact);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 h1, h2, h3, h4, p {
   margin-top: 0;
 }
 
 h1 {
   margin-bottom: 4px;
-  font-size: clamp(26px, 3vw, 36px);
+  font-size: clamp(22px, 2.2vw, 26px);
   font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: -0.025em;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
   color: var(--ink);
 }
 
-.heading-sub {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 400;
-  color: var(--ink-muted);
-  line-height: 1.4;
-}
-
-.heading-meta {
+/* The one line of context under a page title: a date, a filter summary, a
+   count. Not a subtitle explaining what the page is. */
+.page-context {
   margin: 0;
   font-family: var(--font-compact);
   font-size: 13px;
   color: var(--ink-muted);
 }
 
-.heading-meta strong {
+.page-context strong {
   color: var(--status-rejected);
   font-weight: 600;
 }
@@ -1204,451 +1165,275 @@ input[inputmode="decimal"],
 }
 
 /* ==========================================================================
-   Pipeline Visual Language (ETL / EasyBooks Sync)
+   Data primitives: Section, Stat, DataTable, FilterBar, Status, EmptyState
+   Shared by Overview, Finance, and Data. Content over containers: no card
+   background or shadow on any of these except the drilldown overlay.
    ========================================================================== */
 
-.pipeline-card {
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  padding: 20px 22px;
+.section {
+  margin-bottom: 32px;
 }
 
-.pipeline-header {
+.section-head {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
-.pipeline-system {
-  font-family: var(--font-compact);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--brand-green);
-  display: block;
-  margin-bottom: 2px;
-}
-
-.pipeline-title {
-  margin: 0;
-  font-size: 17px;
+.section-head h2 {
+  font-size: 15px;
   font-weight: 600;
   color: var(--ink);
 }
 
-.pipeline-freshness {
+.section-count {
+  font-family: var(--font-compact);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.section-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+/* --- Stat row: flat, bordered, no card --- */
+
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 24px 14px 0;
+  margin-right: 24px;
+  min-width: 120px;
+}
+
+.stat + .stat {
+  border-left: 1px solid var(--line);
+  padding-left: 24px;
+}
+
+.stat-value {
+  font-family: var(--font-compact);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.15;
+}
+
+.stat-value[data-tone="producing"] {
+  color: var(--status-pending-text);
+}
+
+.stat-value[data-tone="ready"] {
+  color: var(--brand-dark);
+}
+
+.stat-value[data-tone="overdue"] {
+  color: var(--status-rejected-text);
+}
+
+.stat-label {
+  font-family: var(--font-compact);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+/* --- DataTable: dense, readable, borders not zebra --- */
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th {
+  padding: 8px 14px 8px 0;
+  text-align: left;
+  font-family: var(--font-compact);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 10px 14px 10px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  vertical-align: top;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tr.clickable {
+  cursor: pointer;
+}
+
+.data-table tr.clickable:hover td {
+  background: var(--paper-sunk);
+}
+
+.data-table tr.clickable:focus-visible td:first-child {
+  outline: 2px solid var(--brand-green);
+  outline-offset: -2px;
+}
+
+/* --- FilterBar / date range --- */
+
+.filter-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.date-range-filter {
+  display: flex;
+  gap: 12px;
+}
+
+.date-range-filter label {
+  min-width: 150px;
+}
+
+/* --- Tabs: a small number of visual treatments, not pills --- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab-item {
+  padding: 8px 4px;
+  margin-right: 20px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tab-item:hover {
+  color: var(--ink);
+}
+
+.tab-item.active {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--brand-green);
+}
+
+/* --- Status pill: label always readable without relying on color alone --- */
+
+.status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid;
   font-family: var(--font-compact);
   font-size: 11px;
   font-weight: 600;
-  border: 1px solid;
+  white-space: nowrap;
 }
 
-.freshness-fresh {
+.status-pill.status-tone-neutral {
+  color: var(--status-draft-text);
+  background: var(--status-draft-bg);
+  border-color: var(--status-draft-border);
+}
+
+.status-pill.status-tone-pending {
+  color: var(--status-pending-text);
+  background: var(--status-pending-bg);
+  border-color: var(--status-pending-border);
+}
+
+.status-pill.status-tone-accepted {
+  color: var(--status-accepted-text);
   background: var(--status-accepted-bg);
   border-color: var(--status-accepted-border);
-  color: var(--status-accepted-text);
 }
 
-.freshness-fresh .freshness-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--status-accepted);
-}
-
-.pipeline-flow {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin: 18px 0;
-  padding: 16px;
-  background: var(--paper-sunk);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-}
-
-.pipeline-step {
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-.step-label-group {
-  margin-bottom: 10px;
-}
-
-.step-name {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.step-subhead {
-  display: block;
-  font-family: var(--font-compact);
-  font-size: 11px;
-  color: var(--ink-muted);
-}
-
-.step-indicator-row {
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-
-.step-node {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px solid;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-compact);
-  font-size: 12px;
-  font-weight: 700;
-  z-index: 2;
-  background: var(--paper-raised);
-}
-
-.step-complete .step-node {
-  background: var(--status-accepted-bg);
-  border-color: var(--status-accepted);
-  color: var(--status-accepted);
-}
-
-.step-running .step-node {
-  background: var(--status-pending-bg);
-  border-color: var(--status-pending);
-  color: var(--status-pending);
-}
-
-.step-failed .step-node {
+.status-pill.status-tone-rejected {
+  color: var(--status-rejected-text);
   background: var(--status-rejected-bg);
-  border-color: var(--status-rejected);
-  color: var(--status-rejected);
+  border-color: var(--status-rejected-border);
 }
 
-.step-connector {
-  flex: 1;
-  height: 2px;
-  background: var(--line-strong);
-  margin-left: 6px;
-}
+/* --- Empty / loading states --- */
 
-.step-detail {
-  display: block;
-  margin-top: 8px;
-  font-family: var(--font-compact);
-  font-size: 11px;
+.empty-state {
+  margin: 0;
+  padding: 20px 0;
   color: var(--ink-muted);
-}
-
-.pipeline-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
   font-size: 13px;
 }
 
-.pipeline-sync-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.sync-label {
-  font-family: var(--font-compact);
-  font-size: 12px;
-  color: var(--ink-muted);
-}
-
-.sync-timestamp {
-  font-family: var(--font-compact);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.pipeline-metrics {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.pipeline-metric-item {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-}
-
-.metric-label {
-  font-family: var(--font-compact);
-  font-size: 11px;
-  color: var(--ink-muted);
-}
-
-.metric-value {
-  font-family: var(--font-compact);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-/* ==========================================================================
-   Overview & Finance Section Layouts
-   ========================================================================== */
-
-.overview-kpi-grid {
+.skeleton {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
-  margin-bottom: 24px;
+  gap: 8px;
+  padding: 4px 0;
 }
 
-.kpi-card {
-  padding: 18px 20px;
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  display: flex;
-  flex-direction: column;
+.skeleton-row {
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--paper-sunk) 25%, var(--line) 50%, var(--paper-sunk) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
 }
 
-.kpi-eyebrow {
-  font-family: var(--font-compact);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--ink-muted);
+@keyframes skeleton-sweep {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
-.kpi-value {
-  font-family: var(--font-compact);
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  margin: 6px 0 4px;
-  line-height: 1;
-}
+/* --- SyncStatus: one line, used on Overview, Finance, and Data --- */
 
-.kpi-value.highlight-producing {
-  color: var(--status-pending);
-}
-
-.kpi-value.highlight-ready {
-  color: var(--status-accepted);
-}
-
-.kpi-caption {
-  font-size: 12px;
-  color: var(--ink-muted);
-}
-
-.kpi-status-row {
-  display: flex;
+.sync-status {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: 10px 0 8px;
-}
-
-.kpi-status-text {
-  font-family: var(--font-compact);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.overview-sections-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-}
-
-.overview-facility-card,
-.finance-guide-card,
-.pipeline-principles-card {
-  padding: 22px 24px;
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-}
-
-.overview-facility-card h3,
-.finance-guide-card h3,
-.pipeline-principles-card h3 {
-  margin: 4px 0 10px;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.facility-desc {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--ink-muted);
-  margin-bottom: 16px;
-}
-
-.spec-table {
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  padding: 14px 16px;
-  background: var(--paper-sunk);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-}
-
-.spec-table > div {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.spec-table dt {
-  font-family: var(--font-compact);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-muted);
-}
-
-.spec-table dd {
-  margin: 0;
   font-family: var(--font-compact);
   font-size: 13px;
-  font-weight: 500;
-  color: var(--ink);
-  text-align: right;
-}
-
-/* Finance Policy Notice */
-.finance-policy-notice {
-  display: flex;
-  align-items: stretch;
-  gap: 14px;
-  padding: 14px 18px;
-  margin-bottom: 24px;
-  background: var(--paper-raised);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-}
-
-.policy-rule {
-  width: 4px;
-  background: var(--status-accepted);
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-
-.finance-policy-notice strong {
-  font-size: 14px;
-  color: var(--ink);
-  display: block;
-  margin-bottom: 3px;
-}
-
-.finance-policy-notice p {
-  margin: 0;
-  font-size: 13px;
   color: var(--ink-muted);
-  line-height: 1.45;
 }
 
-/* Guide Steps */
-.guide-steps {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 14px;
-}
-
-.guide-steps li {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-}
-
-.step-num {
-  font-family: var(--font-compact);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--brand-green);
-  padding: 2px 6px;
-  background: var(--brand-tint);
-  border-radius: 3px;
-}
-
-.guide-steps strong {
-  font-size: 14px;
-  color: var(--ink);
-  display: block;
-}
-
-.guide-steps p {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: var(--ink-muted);
-  line-height: 1.4;
-}
-
-/* Principles Grid in Data View */
-.data-pipeline-container {
-  display: grid;
-  gap: 20px;
-}
-
-.principles-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-  margin-top: 14px;
-}
-
-.principle-item {
+.overview-footer-actions {
   display: flex;
   gap: 12px;
-  padding: 14px;
-  background: var(--paper-sunk);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-control);
-}
-
-.principle-code {
-  font-family: var(--font-compact);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--brand-green);
-}
-
-.principle-item strong {
-  display: block;
-  font-size: 13px;
-  color: var(--ink);
-}
-
-.principle-item p {
-  margin: 3px 0 0;
-  font-size: 12px;
-  color: var(--ink-muted);
-  line-height: 1.4;
+  margin-top: 8px;
 }
 
 /* ==========================================================================
@@ -1686,9 +1471,6 @@ input[inputmode="decimal"],
   .catalog-panel {
     position: static;
   }
-  .overview-sections-grid {
-    grid-template-columns: 1fr;
-  }
   .line-fields {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1699,17 +1481,11 @@ input[inputmode="decimal"],
 }
 
 @media (max-width: 620px) {
-  .brand-site-caption {
-    display: none;
-  }
   .nav-item {
     padding: 6px 10px;
     font-size: 13px;
   }
   .account-identity {
-    display: none;
-  }
-  .site-badge {
     display: none;
   }
   .accounting-facts {
@@ -1747,14 +1523,7 @@ input[inputmode="decimal"],
   .form-footer .primary-button {
     width: 100%;
   }
-  .pipeline-flow {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-  .step-connector {
-    display: none;
-  }
-  .pipeline-footer {
+  .filter-bar {
     flex-direction: column;
     align-items: flex-start;
   }
