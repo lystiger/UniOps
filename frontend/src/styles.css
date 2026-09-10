@@ -1040,6 +1040,50 @@ input[inputmode="decimal"],
   background: var(--paper-raised);
 }
 
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+.password-toggle-button {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-control);
+  color: var(--ink-muted);
+  cursor: pointer;
+  line-height: 1;
+  transition: color var(--motion-fast), background-color var(--motion-fast);
+}
+
+.password-toggle-button:hover {
+  color: var(--ink);
+  background-color: var(--paper-sunk);
+}
+
+.password-toggle-button:focus-visible {
+  outline: 2px solid var(--brand-green);
+  outline-offset: 1px;
+}
+
+.password-toggle-button svg {
+  display: block;
+}
+
 .sign-in-card .message {
   margin: 0;
 }
