@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { api } from "../api";
 import { isoDate, money, today } from "../format";
 import { useApiResource } from "../hooks";
+import { useT } from "../i18n";
+import type { Dictionary } from "../i18n/types";
 import {
   DataTable,
   EmptyState,
@@ -28,17 +30,45 @@ const INVOICE_CATEGORIES: Set<ExceptionCategory> = new Set([
   "INVOICE_WITHOUT_CUSTOMER_CODE",
 ]);
 
-const pipelineBuckets: { label: string; statuses: Order["status"][] }[] = [
-  { label: "Waiting", statuses: ["DRAFT", "CONFIRMED"] },
-  { label: "Scheduled", statuses: ["SCHEDULED"] },
-  { label: "Producing", statuses: ["IN_PRODUCTION"] },
-  { label: "Ready", statuses: ["READY"] },
-  { label: "Delivery pending", statuses: ["DELIVERY_PENDING", "DELIVERED"] },
-  { label: "Invoiced / closed", statuses: ["INVOICED", "CLOSED"] },
+interface PipelineBucketDef {
+  key: keyof Dictionary["overview"]["pipeline"]["buckets"];
+  statuses: Order["status"][];
+}
+
+const pipelineBucketDefs: PipelineBucketDef[] = [
+  { key: "waiting", statuses: ["DRAFT", "CONFIRMED"] },
+  { key: "scheduled", statuses: ["SCHEDULED"] },
+  { key: "producing", statuses: ["IN_PRODUCTION"] },
+  { key: "ready", statuses: ["READY"] },
+  { key: "deliveryPending", statuses: ["DELIVERY_PENDING", "DELIVERED"] },
+  { key: "invoicedClosed", statuses: ["INVOICED", "CLOSED"] },
 ];
 
 interface AttentionRow extends ExceptionItem {
   order?: Order;
+}
+
+function renderExceptionIssue(row: AttentionRow, t: Dictionary): string {
+  switch (row.category) {
+    case "DELIVERED_ORDER_NOT_INVOICED":
+      return t.overview.attentionIssues.DELIVERED_ORDER_NOT_INVOICED;
+    case "INVOICE_WITHOUT_ORDER":
+      return t.overview.attentionIssues.INVOICE_WITHOUT_ORDER;
+    case "AMBIGUOUS_INVOICE_CANDIDATES":
+      return t.overview.attentionIssues.AMBIGUOUS_INVOICE_CANDIDATES;
+    case "LINKED_CUSTOMER_MISMATCH":
+      return t.overview.attentionIssues.LINKED_CUSTOMER_MISMATCH;
+    case "LINKED_AMOUNT_MISMATCH":
+      return t.overview.attentionIssues.LINKED_AMOUNT_MISMATCH({
+        orderTotal: row.order_total ? money(row.order_total) : "—",
+        invoiceSubtotal: row.invoice_subtotal ? money(row.invoice_subtotal) : "—",
+        invoiceTotal: row.total_amount ? money(row.total_amount) : "—",
+      });
+    case "INVOICE_WITHOUT_CUSTOMER_CODE":
+      return t.overview.attentionIssues.INVOICE_WITHOUT_CUSTOMER_CODE;
+    default:
+      return row.detail;
+  }
 }
 
 export function OverviewView({
@@ -53,6 +83,8 @@ export function OverviewView({
   onSessionLost: () => void;
 }) {
   const [showAllInvoices, setShowAllInvoices] = useState(false);
+  const t = useT();
+
   const orders = useApiResource(() => api.orders(""), [], onSessionLost);
   const exceptions = useApiResource(
     () => api.exceptions(showAllInvoices ? 500 : 10),
@@ -116,29 +148,29 @@ export function OverviewView({
 
   return (
     <div className="overview-page">
-      <PageHeader title="Overview" context={isoDate(today())} />
+      <PageHeader title={t.overview.title} context={isoDate(today())} />
 
       <Section>
         {orders.loading ? (
           <Skeleton rows={1} />
         ) : orders.error ? (
-          <ErrorState>Could not load orders.</ErrorState>
+          <ErrorState>{t.overview.errors.loadOrders}</ErrorState>
         ) : (
           <StatRow>
-            <Stat label="Active orders" value={activeOrders.length} />
-            <Stat label="Producing" value={producingCount} tone="producing" />
-            <Stat label="Ready" value={readyCount} tone="ready" />
-            <Stat label="Delivery pending" value={deliveryCount} />
+            <Stat label={t.overview.stats.activeOrders} value={activeOrders.length} />
+            <Stat label={t.overview.stats.producing} value={producingCount} tone="producing" />
+            <Stat label={t.overview.stats.ready} value={readyCount} tone="ready" />
+            <Stat label={t.overview.stats.deliveryPending} value={deliveryCount} />
           </StatRow>
         )}
       </Section>
 
       <Section
-        title="Needs attention"
+        title={t.overview.attention.title}
         action={
           exceptions.data && exceptions.data.total > 0 ? (
             <span className="section-count">
-              {orderTotalCount} order {orderTotalCount === 1 ? "issue" : "issues"} · {invoiceTotalCount} invoice {invoiceTotalCount === 1 ? "issue" : "issues"}
+              {t.overview.attention.orderIssuesCount(orderTotalCount)} · {t.overview.attention.invoiceIssuesCount(invoiceTotalCount)}
             </span>
           ) : undefined
         }
@@ -146,44 +178,48 @@ export function OverviewView({
         {exceptions.loading ? (
           <Skeleton />
         ) : exceptions.error ? (
-          <ErrorState>Could not load exceptions.</ErrorState>
+          <ErrorState>{t.overview.errors.loadExceptions}</ErrorState>
         ) : orderTotalCount === 0 && invoiceTotalCount === 0 ? (
-          <EmptyState>Nothing needs attention.</EmptyState>
+          <EmptyState>{t.overview.attention.nothingNeedsAttention}</EmptyState>
         ) : (
           <div className="attention-groups">
             <div className="attention-group">
               <div className="attention-group-head">
                 <span className="attention-group-title">
-                  Order exceptions ({orderTotalCount})
+                  {t.overview.attention.orderExceptions} ({orderTotalCount})
                 </span>
               </div>
               {orderTotalCount === 0 ? (
-                <EmptyState>No order exceptions</EmptyState>
+                <EmptyState>{t.overview.attention.noOrderExceptions}</EmptyState>
               ) : (
                 <>
                   <DataTable
                     columns={[
                       {
                         key: "reference",
-                        header: "Reference",
+                        header: t.overview.attention.columns.reference,
                         render: (row: AttentionRow) => row.order?.order_number ?? row.reference,
                       },
                       {
                         key: "customer",
-                        header: "Customer",
+                        header: t.overview.attention.columns.customer,
                         render: (row: AttentionRow) =>
                           row.customer_name ?? row.order?.customer.name ?? "—",
                       },
-                      { key: "issue", header: "Issue", render: (row: AttentionRow) => row.detail },
+                      {
+                        key: "issue",
+                        header: t.overview.attention.columns.issue,
+                        render: (row: AttentionRow) => renderExceptionIssue(row, t),
+                      },
                       {
                         key: "status",
-                        header: "Status",
+                        header: t.overview.attention.columns.status,
                         render: (row: AttentionRow) =>
                           row.order ? <StatusBadge status={row.order.status} /> : "—",
                       },
                       {
                         key: "required",
-                        header: "Required",
+                        header: t.overview.attention.columns.required,
                         render: (row: AttentionRow) =>
                           row.document_date
                             ? isoDate(row.document_date)
@@ -197,7 +233,7 @@ export function OverviewView({
                   />
                   {orderTotalCount > orderRows.length && (
                     <p className="section-note">
-                      Showing {orderRows.length} of {orderTotalCount}
+                      {t.overview.attention.showingCount(orderRows.length, orderTotalCount)}
                     </p>
                   )}
                 </>
@@ -208,31 +244,35 @@ export function OverviewView({
               <div className="attention-group">
                 <div className="attention-group-head">
                   <span className="attention-group-title">
-                    Invoice backlog & data issues ({invoiceTotalCount})
+                    {t.overview.attention.invoiceBacklog} ({invoiceTotalCount})
                   </span>
                 </div>
                 <DataTable
                   columns={[
                     {
                       key: "reference",
-                      header: "Reference",
+                      header: t.overview.attention.columns.reference,
                       render: (row: AttentionRow) => row.reference,
                     },
                     {
                       key: "customer",
-                      header: "Customer",
+                      header: t.overview.attention.columns.customer,
                       render: (row: AttentionRow) => row.customer_name ?? "—",
                     },
-                    { key: "issue", header: "Issue", render: (row: AttentionRow) => row.detail },
+                    {
+                      key: "issue",
+                      header: t.overview.attention.columns.issue,
+                      render: (row: AttentionRow) => renderExceptionIssue(row, t),
+                    },
                     {
                       key: "date",
-                      header: "Invoice date",
+                      header: t.overview.attention.columns.invoiceDate,
                       render: (row: AttentionRow) =>
                         row.document_date ? isoDate(row.document_date) : "—",
                     },
                     {
                       key: "amount",
-                      header: "Amount",
+                      header: t.overview.attention.columns.amount,
                       align: "right",
                       render: (row: AttentionRow) =>
                         row.total_amount ? money(row.total_amount) : "—",
@@ -244,8 +284,8 @@ export function OverviewView({
                 <div className="attention-pagination-bar">
                   <span>
                     {invoiceTotalCount > invoiceRows.length
-                      ? `Showing ${invoiceRows.length} of ${invoiceTotalCount}`
-                      : `Showing all ${invoiceRows.length}`}
+                      ? t.overview.attention.showingCount(invoiceRows.length, invoiceTotalCount)
+                      : t.overview.attention.showingAll(invoiceRows.length)}
                   </span>
                   {invoiceTotalCount > 10 && (
                     <button
@@ -253,7 +293,7 @@ export function OverviewView({
                       className="attention-view-all-btn"
                       onClick={() => setShowAllInvoices((prev) => !prev)}
                     >
-                      {showAllInvoices ? "Show 10" : `View all (${invoiceTotalCount})`}
+                      {showAllInvoices ? t.overview.attention.showTen : t.overview.attention.viewAll(invoiceTotalCount)}
                     </button>
                   )}
                 </div>
@@ -263,66 +303,74 @@ export function OverviewView({
         )}
       </Section>
 
-      <Section title="Production pipeline">
+      <Section title={t.overview.pipeline.title}>
         {orders.loading ? (
           <Skeleton />
         ) : orders.error ? (
-          <ErrorState>Could not load orders.</ErrorState>
+          <ErrorState>{t.overview.errors.loadOrders}</ErrorState>
         ) : (
           <DataTable
             columns={[
-              { key: "label", header: "Status", render: (row: (typeof pipelineBuckets)[number]) => row.label },
+              {
+                key: "label",
+                header: t.overview.pipeline.columns.status,
+                render: (row: PipelineBucketDef) => t.overview.pipeline.buckets[row.key],
+              },
               {
                 key: "count",
-                header: "Orders",
+                header: t.overview.pipeline.columns.orders,
                 align: "right",
-                render: (row: (typeof pipelineBuckets)[number]) =>
+                render: (row: PipelineBucketDef) =>
                   activeOrders.filter((order) => row.statuses.includes(order.status)).length,
               },
             ]}
-            rows={pipelineBuckets}
-            rowKey={(row) => row.label}
+            rows={pipelineBucketDefs}
+            rowKey={(row) => row.key}
           />
         )}
       </Section>
 
-      <Section title="Commercial snapshot">
+      <Section title={t.overview.commercialSnapshot}>
         {commercial.loading || receivables.loading ? (
           <Skeleton rows={1} />
         ) : commercial.error ? (
-          <ErrorState>Could not load EasyBooks analytics.</ErrorState>
+          <ErrorState>{t.overview.errors.loadAnalytics}</ErrorState>
         ) : (
           <StatRow>
-            <Stat label="Sales" value={money(commercial.data?.sales.total)} />
-            <Stat label="Purchases" value={money(commercial.data?.purchases.total)} />
+            <Stat label={t.overview.stats.sales} value={money(commercial.data?.sales.total)} />
+            <Stat label={t.overview.stats.purchases} value={money(commercial.data?.purchases.total)} />
             <Stat
-              label="Receivables outstanding"
+              label={t.overview.stats.receivablesOutstanding}
               value={
                 receivables.error
                   ? "—"
                   : money(receivables.data?.total_outstanding ?? null)
               }
             />
-            <Stat label="Sales − purchases" value={money(commercial.data?.sales_minus_purchases)} />
+            <Stat label={t.overview.stats.salesMinusPurchases} value={money(commercial.data?.sales_minus_purchases)} />
           </StatRow>
         )}
         {!receivables.loading && !receivables.error && receivables.data && receivables.data.total_outstanding === null && (
-          <p className="section-note">{receivables.data.outstanding_status}.</p>
+          <p className="section-note">
+            {receivables.data.outstanding_status?.startsWith("EasyBooks exposes no paid or outstanding amount")
+              ? t.accounting.outstandingExposesNote
+              : receivables.data.outstanding_status}.
+          </p>
         )}
       </Section>
 
-      <Section title="EasyBooks sync">
+      <Section title={t.overview.easybooksSync}>
         <SyncStatus runs={sync.data} loading={sync.loading} />
-        {sync.error && <ErrorState>Could not load synchronization history.</ErrorState>}
+        {sync.error && <ErrorState>{t.overview.errors.loadSync}</ErrorState>}
       </Section>
 
       <div className="overview-footer-actions">
         <button className="secondary-button" type="button" onClick={onNavigateOrders}>
-          View order board
+          {t.overview.actions.viewOrderBoard}
         </button>
         {canWrite && (
           <button className="primary-button" type="button" onClick={onNewOrder}>
-            + New order
+            {t.overview.actions.newOrder}
           </button>
         )}
       </div>

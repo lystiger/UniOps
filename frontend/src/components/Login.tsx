@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from "react";
-import { api } from "../api";
+import { api, formatApiError } from "../api";
+import { LanguageSwitcher, useT } from "../i18n";
 import type { User } from "../types";
 
 export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
@@ -8,6 +9,7 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const t = useT();
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -16,7 +18,7 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
     try {
       onSignedIn(await api.login(username, password));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Sign-in did not work");
+      setError(formatApiError(reason, t).message);
       setPassword("");
     } finally {
       setBusy(false);
@@ -26,25 +28,28 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
   return (
     <section className="sign-in-page">
       <form className="sign-in-card" onSubmit={submit}>
-        <div className="sign-in-brand">
-          <svg viewBox="0 0 64 64" className="brand-icon" aria-hidden="true">
-            <rect width="64" height="64" rx="14" fill="#176b3a" />
-            <path d="M18 18v20c0 9 5 14 14 14s14-5 14-14V18h-9v20c0 4-1 6-5 6s-5-2-5-6V18z" fill="#fff" />
-            <path d="M32 9c7 1 11 5 12 11-7 0-11-4-12-11z" fill="#b9df70" />
-          </svg>
-          <span className="brand-wordmark">
-            Uni<span className="brand-green-accent">-Green</span> <span className="brand-ops-slash">/</span> <span className="brand-ops-label">OPS</span>
-          </span>
+        <div className="sign-in-top-row">
+          <div className="sign-in-brand">
+            <svg viewBox="0 0 64 64" className="brand-icon" aria-hidden="true">
+              <rect width="64" height="64" rx="14" fill="#176b3a" />
+              <path d="M18 18v20c0 9 5 14 14 14s14-5 14-14V18h-9v20c0 4-1 6-5 6s-5-2-5-6V18z" fill="#fff" />
+              <path d="M32 9c7 1 11 5 12 11-7 0-11-4-12-11z" fill="#b9df70" />
+            </svg>
+            <span className="brand-wordmark">
+              Uni<span className="brand-green-accent">-Green</span> <span className="brand-ops-slash">/</span> <span className="brand-ops-label">OPS</span>
+            </span>
+          </div>
+          <LanguageSwitcher className="sign-in-language-switcher" />
         </div>
         <h1>UniOps</h1>
-        <p className="sign-in-lead">Sign in to reach the order desk &amp; factory operations.</p>
+        <p className="sign-in-lead">{t.auth.signInLead}</p>
         {error && (
           <div className="message error" role="alert">
             {error}
           </div>
         )}
         <label>
-          <span>Username</span>
+          <span>{t.auth.username}</span>
           <input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -54,7 +59,7 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
           />
         </label>
         <label>
-          <span>Password</span>
+          <span>{t.auth.password}</span>
           <div className="password-input-wrapper">
             <input
               type={showPassword ? "text" : "password"}
@@ -67,8 +72,8 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
               type="button"
               className="password-toggle-button"
               onClick={() => setShowPassword((prev) => !prev)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              title={showPassword ? "Hide password" : "Show password"}
+              aria-label={showPassword ? t.auth.hidePassword : t.auth.showPassword}
+              title={showPassword ? t.auth.hidePassword : t.auth.showPassword}
               tabIndex={-1}
             >
               {showPassword ? (
@@ -108,7 +113,7 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
           </div>
         </label>
         <button className="primary-button large" type="submit" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? t.auth.signingIn : t.auth.signIn}
         </button>
       </form>
     </section>

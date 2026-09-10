@@ -1,18 +1,14 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { api } from "../api";
-import type { Role, User } from "../types";
-
-const roleLabels: Record<Role, string> = {
-  ADMIN: "Admin",
-  OFFICE: "Office",
-  FACTORY_READ: "Factory · read only",
-};
+import { api, formatApiError } from "../api";
+import { LanguageSwitcher, useT } from "../i18n";
+import type { User } from "../types";
 
 export function AccountMenu({ user, onSignedOut }: { user: User; onSignedOut: () => void }) {
   const [open, setOpen] = useState(false);
   const [changing, setChanging] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const t = useT();
 
   useEffect(() => {
     if (!open) return;
@@ -54,9 +50,9 @@ export function AccountMenu({ user, onSignedOut }: { user: User; onSignedOut: ()
         className={`settings-trigger ${open ? "active" : ""}`}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        aria-label="Settings"
+        aria-label={t.auth.settingsTitle}
         aria-expanded={open}
-        title="Settings"
+        title={t.auth.settingsTitle}
       >
         <svg
           viewBox="0 0 24 24"
@@ -74,7 +70,7 @@ export function AccountMenu({ user, onSignedOut }: { user: User; onSignedOut: ()
         </svg>
       </button>
 
-      <div className={`settings-dropdown ${open ? "open" : ""}`} role="dialog" aria-label="Account Settings">
+      <div className={`settings-dropdown ${open ? "open" : ""}`} role="dialog" aria-label={t.auth.settingsAria}>
         <div className="settings-user-header">
           <div className="settings-avatar" aria-hidden="true">
             {initial}
@@ -87,7 +83,14 @@ export function AccountMenu({ user, onSignedOut }: { user: User; onSignedOut: ()
 
         <div className={`settings-role-badge role-${user.role.toLowerCase().replace("_", "-")}`}>
           <span className="role-dot" aria-hidden="true" />
-          <span>Status: <strong>{roleLabels[user.role]}</strong></span>
+          <span>{t.roles.statusPrefix} <strong>{t.roles[user.role]}</strong></span>
+        </div>
+
+        <hr className="settings-divider" />
+
+        <div className="settings-language-section">
+          <span className="settings-section-label">{t.auth.language}</span>
+          <LanguageSwitcher className="settings-language-switcher" />
         </div>
 
         <hr className="settings-divider" />
@@ -103,7 +106,7 @@ export function AccountMenu({ user, onSignedOut }: { user: User; onSignedOut: ()
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
-            <span>Change password</span>
+            <span>{t.auth.changePassword}</span>
             <svg
               className={`settings-action-chevron ${changing ? "expanded" : ""}`}
               viewBox="0 0 24 24"
@@ -143,7 +146,7 @@ export function AccountMenu({ user, onSignedOut }: { user: User; onSignedOut: ()
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            <span>{signingOut ? "Signing out…" : "Sign out"}</span>
+            <span>{signingOut ? t.auth.signingOut : t.auth.signOut}</span>
           </button>
         </div>
       </div>
@@ -163,6 +166,7 @@ function PasswordInputWithToggle({
   autoComplete: string;
 }) {
   const [show, setShow] = useState(false);
+  const t = useT();
 
   return (
     <label>
@@ -179,8 +183,8 @@ function PasswordInputWithToggle({
           type="button"
           className="password-toggle-button"
           onClick={() => setShow((prev) => !prev)}
-          aria-label={show ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
-          title={show ? "Hide password" : "Show password"}
+          aria-label={show ? t.auth.hidePassword : t.auth.showPassword}
+          title={show ? t.auth.hidePassword : t.auth.showPassword}
           tabIndex={-1}
         >
           {show ? (
@@ -233,6 +237,7 @@ function ChangePassword({
   const [next, setNext] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const t = useT();
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -242,7 +247,8 @@ function ChangePassword({
       await api.changePassword(current, next);
       onDone();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Password was not changed");
+      const errInfo = formatApiError(reason, t);
+      setError(errInfo.message);
     } finally {
       setBusy(false);
     }
@@ -250,27 +256,27 @@ function ChangePassword({
 
   return (
     <form className="settings-password-form" onSubmit={submit}>
-      <p>Changing your password signs out every other browser session.</p>
+      <p>{t.auth.changePasswordNotice}</p>
       {error && (
         <div className="message error" role="alert">
           {error}
         </div>
       )}
       <PasswordInputWithToggle
-        label="Current password"
+        label={t.auth.currentPassword}
         value={current}
         onChange={setCurrent}
         autoComplete="current-password"
       />
       <PasswordInputWithToggle
-        label="New password"
+        label={t.auth.newPassword}
         value={next}
         onChange={setNext}
         autoComplete="new-password"
       />
       <div className="settings-password-buttons">
         <button className="primary-button small" type="submit" disabled={busy}>
-          {busy ? "Saving…" : "Save"}
+          {busy ? t.common.saving : t.common.save}
         </button>
         <button
           className="ghost-button small"
@@ -278,7 +284,7 @@ function ChangePassword({
           onClick={onCancel}
           disabled={busy}
         >
-          Cancel
+          {t.common.cancel}
         </button>
       </div>
     </form>

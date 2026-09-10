@@ -1,6 +1,7 @@
 import { api } from "../api";
-import { duration, latestSyncRuns, number, syncStatusLabel, syncStatusTone, timestamp } from "../format";
+import { duration, latestSyncRuns, number, syncStatusTone, timestamp } from "../format";
 import { useApiResource } from "../hooks";
+import { useLocale, useT } from "../i18n";
 import { DataTable, EmptyState, ErrorState, PageHeader, Section, Skeleton, Status } from "./primitives";
 import type { SyncRun } from "../types";
 
@@ -8,77 +9,79 @@ export function DataView({ onSessionLost }: { onSessionLost: () => void }) {
   const sync = useApiResource(() => api.syncRuns(20), [], onSessionLost);
   const runs = sync.data ?? [];
   const { lastSuccess, lastAttempt } = latestSyncRuns(runs);
+  const { locale } = useLocale();
+  const t = useT();
 
   return (
     <div className="data-page">
-      <PageHeader title="Data" context="EasyBooks synchronization" />
+      <PageHeader title={t.data.title} context={t.data.context} />
 
       <Section>
         {sync.loading ? (
           <Skeleton rows={1} />
         ) : sync.error ? (
-          <ErrorState>Could not load synchronization history.</ErrorState>
+          <ErrorState>{t.data.errors.loadHistory}</ErrorState>
         ) : runs.length === 0 ? (
-          <EmptyState>No EasyBooks synchronization has run yet.</EmptyState>
+          <EmptyState>{t.data.empty}</EmptyState>
         ) : (
           <dl className="accounting-facts">
             <div>
-              <dt>Last successful sync</dt>
+              <dt>{t.data.facts.lastSuccess}</dt>
               <dd>{lastSuccess ? timestamp(lastSuccess.started_at) : "—"}</dd>
             </div>
             <div>
-              <dt>Last attempt</dt>
+              <dt>{t.data.facts.lastAttempt}</dt>
               <dd>{lastAttempt ? timestamp(lastAttempt.started_at) : "—"}</dd>
             </div>
             <div>
-              <dt>Status</dt>
+              <dt>{t.data.facts.status}</dt>
               <dd>
                 {lastAttempt ? (
-                  <Status label={syncStatusLabel[lastAttempt.status]} tone={syncStatusTone[lastAttempt.status]} />
+                  <Status label={t.sync.status[lastAttempt.status]} tone={syncStatusTone[lastAttempt.status]} />
                 ) : (
                   "—"
                 )}
               </dd>
             </div>
             <div>
-              <dt>Rows processed</dt>
+              <dt>{t.data.facts.rowsProcessed}</dt>
               <dd>{lastAttempt ? number(lastAttempt.documents_seen) : "—"}</dd>
             </div>
           </dl>
         )}
       </Section>
 
-      <Section title="Recent synchronization runs">
+      <Section title={t.data.recentRuns}>
         {sync.loading ? (
           <Skeleton />
         ) : sync.error ? (
-          <ErrorState>Could not load synchronization history.</ErrorState>
+          <ErrorState>{t.data.errors.loadHistory}</ErrorState>
         ) : runs.length === 0 ? (
-          <EmptyState>No synchronization runs recorded.</EmptyState>
+          <EmptyState>{t.data.noRunsYet}</EmptyState>
         ) : (
           <DataTable
             columns={[
-              { key: "time", header: "Time", render: (row: SyncRun) => timestamp(row.started_at) },
-              { key: "mode", header: "Mode", render: (row: SyncRun) => row.mode },
+              { key: "time", header: t.data.columns.time, render: (row: SyncRun) => timestamp(row.started_at) },
+              { key: "mode", header: t.data.columns.mode, render: (row: SyncRun) => row.mode },
               {
                 key: "status",
-                header: "Status",
-                render: (row: SyncRun) => <Status label={syncStatusLabel[row.status]} tone={syncStatusTone[row.status]} />,
+                header: t.data.columns.status,
+                render: (row: SyncRun) => <Status label={t.sync.status[row.status]} tone={syncStatusTone[row.status]} />,
               },
-              { key: "rows", header: "Rows", align: "right", render: (row: SyncRun) => number(row.documents_seen) },
+              { key: "rows", header: t.data.columns.rows, align: "right", render: (row: SyncRun) => number(row.documents_seen) },
               {
                 key: "warnings",
-                header: "Warnings",
+                header: t.data.columns.warnings,
                 align: "right",
                 render: (row: SyncRun) => (row.reconciliation_warnings > 0 ? `${number(row.reconciliation_warnings)}` : "0"),
               },
               {
                 key: "duration",
-                header: "Duration / details",
+                header: t.data.columns.durationDetails,
                 render: (row: SyncRun) =>
                   row.error_summary
-                    ? `${duration(row.started_at, row.finished_at)} (${row.error_summary})`
-                    : duration(row.started_at, row.finished_at),
+                    ? `${duration(row.started_at, row.finished_at, locale)} (${row.error_summary})`
+                    : duration(row.started_at, row.finished_at, locale),
               },
             ]}
             rows={runs}

@@ -1,3 +1,4 @@
+import { useLocale, useT } from "../i18n";
 import { quoteOfTheDay } from "../quotes";
 
 /**
@@ -7,7 +8,9 @@ import { quoteOfTheDay } from "../quotes";
  * every animation here off.
  */
 export function LoadingScreen() {
-  const quote = quoteOfTheDay();
+  const { locale } = useLocale();
+  const t = useT();
+  const quote = quoteOfTheDay(new Date(), locale);
 
   return (
     <div className="loading-state-screen">
@@ -36,7 +39,7 @@ export function LoadingScreen() {
 
         <p className="loading-status">
           <span className="live-dot pulse" aria-hidden="true" />
-          Verifying your session…
+          {t.auth.verifyingSession}
         </p>
       </div>
 

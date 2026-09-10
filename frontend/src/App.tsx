@@ -8,15 +8,17 @@ import { Login } from "./components/Login";
 import { NewOrder } from "./components/NewOrder";
 import { OrderBoard } from "./components/OrderBoard";
 import { OverviewView } from "./components/OverviewView";
+import { LocaleProvider, useT } from "./i18n";
 import { canWrite, type User } from "./types";
 
 type View = "board" | "new" | "overview" | "finance" | "data";
 
-export default function App() {
+export function AppInner() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
   const [view, setView] = useState<View>("board");
   const [boardVersion, setBoardVersion] = useState(0);
+  const t = useT();
 
   useEffect(() => {
     api
@@ -65,34 +67,34 @@ export default function App() {
           </button>
         </div>
 
-        <nav className="topbar-nav" aria-label="Primary">
+        <nav className="topbar-nav" aria-label={t.nav.primaryNavAria}>
           <button
             className={view === "overview" ? "nav-item active" : "nav-item"}
             type="button"
             onClick={() => setView("overview")}
           >
-            Overview
+            {t.nav.overview}
           </button>
           <button
             className={view === "board" ? "nav-item active" : "nav-item"}
             type="button"
             onClick={() => setView("board")}
           >
-            Orders
+            {t.nav.orders}
           </button>
           <button
             className={view === "finance" ? "nav-item active" : "nav-item"}
             type="button"
             onClick={() => setView("finance")}
           >
-            Finance
+            {t.nav.finance}
           </button>
           <button
             className={view === "data" ? "nav-item active" : "nav-item"}
             type="button"
             onClick={() => setView("data")}
           >
-            Data
+            {t.nav.data}
           </button>
           {writer && (
             <button
@@ -100,7 +102,7 @@ export default function App() {
               type="button"
               onClick={() => setView("new")}
             >
-              + New order
+              {t.nav.newOrder}
             </button>
           )}
         </nav>
@@ -140,5 +142,13 @@ export default function App() {
         {view === "data" && <DataView onSessionLost={handleSessionLost} />}
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <LocaleProvider>
+      <AppInner />
+    </LocaleProvider>
   );
 }

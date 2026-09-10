@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, UnauthorizedError } from "../api";
+import { api, formatApiError, UnauthorizedError } from "../api";
 import { isoDate, money, number } from "../format";
 import { useApiResource } from "../hooks";
+import { useT } from "../i18n";
+import type { Dictionary } from "../i18n/types";
 import {
   DataTable,
   DateRangeFilter,
@@ -41,14 +43,24 @@ function writeQuery(next: { fromDate: string; toDate: string; tab: Tab }) {
   window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
 }
 
-function monthTable(rows: MonthlyAmount[]) {
-  if (rows.length === 0) return <EmptyState>No documents with a date in this period.</EmptyState>;
+function MonthTable({ rows, t }: { rows: MonthlyAmount[]; t: Dictionary }) {
+  if (rows.length === 0) return <EmptyState>{t.finance.noDocumentsDatedInPeriod}</EmptyState>;
   return (
     <DataTable
       columns={[
-        { key: "month", header: "Month", render: (row: MonthlyAmount) => row.month },
-        { key: "count", header: "Documents", align: "right", render: (row: MonthlyAmount) => number(row.document_count) },
-        { key: "amount", header: "Amount", align: "right", render: (row: MonthlyAmount) => money(row.amount) },
+        { key: "month", header: t.finance.columns.month, render: (row: MonthlyAmount) => row.month },
+        {
+          key: "count",
+          header: t.finance.columns.documents,
+          align: "right",
+          render: (row: MonthlyAmount) => number(row.document_count),
+        },
+        {
+          key: "amount",
+          header: t.finance.columns.amount,
+          align: "right",
+          render: (row: MonthlyAmount) => money(row.amount),
+        },
       ]}
       rows={rows}
       rowKey={(row) => row.month}
@@ -62,6 +74,7 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
   const [fromDate, setFromDate] = useState(initial.fromDate);
   const [toDate, setToDate] = useState(initial.toDate);
   const [drilldownId, setDrilldownId] = useState<string | null>(null);
+  const t = useT();
 
   useEffect(() => {
     writeQuery({ fromDate, toDate, tab });
@@ -77,7 +90,7 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
 
   return (
     <div className="finance-page">
-      <PageHeader title="Finance" />
+      <PageHeader title={t.finance.title} />
 
       <FilterBar>
         <DateRangeFilter
@@ -91,25 +104,25 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
         <SyncStatus runs={sync.data} loading={sync.loading} />
       </FilterBar>
 
-      <Section title="Summary">
+      <Section title={t.finance.summary}>
         {overview.loading || receivables.loading ? (
           <Skeleton rows={1} />
         ) : overview.error ? (
-          <ErrorState>Could not load EasyBooks analytics.</ErrorState>
+          <ErrorState>{t.finance.errors.loadAnalytics}</ErrorState>
         ) : (
           <StatRow>
-            <Stat label="Sales" value={money(overview.data?.sales.total)} />
-            <Stat label="Purchases" value={money(overview.data?.purchases.total)} />
+            <Stat label={t.finance.stats.sales} value={money(overview.data?.sales.total)} />
+            <Stat label={t.finance.stats.purchases} value={money(overview.data?.purchases.total)} />
             <Stat
-              label="Receivables outstanding"
+              label={t.finance.receivablesOutstanding}
               value={receivables.error ? "—" : money(receivables.data?.total_outstanding ?? null)}
             />
-            <Stat label="Sales − purchases" value={money(overview.data?.sales_minus_purchases)} />
+            <Stat label={t.finance.salesMinusPurchases} value={money(overview.data?.sales_minus_purchases)} />
           </StatRow>
         )}
       </Section>
 
-      <div className="tabs" role="tablist" aria-label="Finance data">
+      <div className="tabs" role="tablist" aria-label={t.finance.title}>
         {(["sales", "purchases", "receivables"] as Tab[]).map((value) => (
           <button
             key={value}
@@ -119,7 +132,11 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
             type="button"
             onClick={() => setTab(value)}
           >
-            {value === "sales" ? "Sales" : value === "purchases" ? "Purchases" : "Receivables"}
+            {value === "sales"
+              ? t.finance.tabs.sales
+              : value === "purchases"
+                ? t.finance.tabs.purchases
+                : t.finance.tabs.receivables}
           </button>
         ))}
       </div>
@@ -129,24 +146,23 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
           {sales.loading ? (
             <Skeleton />
           ) : sales.error ? (
-            <ErrorState>Could not load EasyBooks sales data.</ErrorState>
+            <ErrorState>{t.finance.errors.loadSales}</ErrorState>
           ) : sales.data && sales.data.document_count === 0 ? (
-            <EmptyState>No sales records for this period.</EmptyState>
+            <EmptyState>{t.finance.noSalesRecords}</EmptyState>
           ) : (
             <>
               <StatRow>
-                <Stat label="Documents" value={number(sales.data?.document_count)} />
-                <Stat label="Customers" value={number(sales.data?.customer_count)} />
-                <Stat label="Total" value={money(sales.data?.total)} />
-                <Stat label="VAT" value={money(sales.data?.vat_amount)} />
+                <Stat label={t.finance.stats.documents} value={number(sales.data?.document_count)} />
+                <Stat label={t.finance.stats.customers} value={number(sales.data?.customer_count)} />
+                <Stat label={t.finance.stats.total} value={money(sales.data?.total)} />
+                <Stat label={t.finance.stats.vat} value={money(sales.data?.vat_amount)} />
               </StatRow>
               {sales.data && sales.data.undated_document_count > 0 && (
                 <p className="section-note">
-                  {sales.data.undated_document_count} document(s) have no date in EasyBooks and are
-                  excluded from the monthly breakdown and any date filter.
+                  {t.finance.undatedDocumentsNote(sales.data.undated_document_count)}
                 </p>
               )}
-              {sales.data && monthTable(sales.data.by_month)}
+              {sales.data && <MonthTable rows={sales.data.by_month} t={t} />}
             </>
           )}
         </Section>
@@ -157,24 +173,23 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
           {purchases.loading ? (
             <Skeleton />
           ) : purchases.error ? (
-            <ErrorState>Could not load EasyBooks purchase data.</ErrorState>
+            <ErrorState>{t.finance.errors.loadPurchases}</ErrorState>
           ) : purchases.data && purchases.data.document_count === 0 ? (
-            <EmptyState>No purchase records for this period.</EmptyState>
+            <EmptyState>{t.finance.noPurchaseRecords}</EmptyState>
           ) : (
             <>
               <StatRow>
-                <Stat label="Documents" value={number(purchases.data?.document_count)} />
-                <Stat label="Suppliers" value={number(purchases.data?.supplier_count)} />
-                <Stat label="Total" value={money(purchases.data?.total)} />
-                <Stat label="VAT" value={money(purchases.data?.vat_amount)} />
+                <Stat label={t.finance.stats.documents} value={number(purchases.data?.document_count)} />
+                <Stat label={t.finance.stats.suppliers} value={number(purchases.data?.supplier_count)} />
+                <Stat label={t.finance.stats.total} value={money(purchases.data?.total)} />
+                <Stat label={t.finance.stats.vat} value={money(purchases.data?.vat_amount)} />
               </StatRow>
               {purchases.data && purchases.data.undated_document_count > 0 && (
                 <p className="section-note">
-                  {purchases.data.undated_document_count} document(s) have no date in EasyBooks and are
-                  excluded from the monthly breakdown and any date filter.
+                  {t.finance.undatedDocumentsNote(purchases.data.undated_document_count)}
                 </p>
               )}
-              {purchases.data && monthTable(purchases.data.by_month)}
+              {purchases.data && <MonthTable rows={purchases.data.by_month} t={t} />}
             </>
           )}
         </Section>
@@ -185,41 +200,63 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
           {receivables.loading ? (
             <Skeleton />
           ) : receivables.error ? (
-            <ErrorState>Could not load EasyBooks receivables data.</ErrorState>
+            <ErrorState>{t.finance.errors.loadReceivables}</ErrorState>
           ) : receivables.data && receivables.data.invoice_count === 0 ? (
-            <EmptyState>No invoices for this period.</EmptyState>
+            <EmptyState>{t.finance.noInvoicesPeriod}</EmptyState>
           ) : (
             <>
               <StatRow>
-                <Stat label="Invoiced" value={money(receivables.data?.total_invoiced)} />
-                <Stat label="Invoices" value={number(receivables.data?.invoice_count)} />
-                <Stat label="Linked to an order" value={number(receivables.data?.linked_invoice_count)} />
-                <Stat label="Unlinked" value={number(receivables.data?.unlinked_invoice_count)} />
+                <Stat label={t.finance.stats.invoiced} value={money(receivables.data?.total_invoiced)} />
+                <Stat label={t.finance.stats.invoices} value={number(receivables.data?.invoice_count)} />
+                <Stat label={t.finance.stats.linkedToOrder} value={number(receivables.data?.linked_invoice_count)} />
+                <Stat label={t.finance.stats.unlinked} value={number(receivables.data?.unlinked_invoice_count)} />
               </StatRow>
               {receivables.data && receivables.data.total_outstanding === null && (
                 <p className="section-note">
-                  Outstanding balance: {receivables.data.outstanding_status}.
+                  {t.finance.outstandingBalanceNote(
+                    receivables.data.outstanding_status?.startsWith("EasyBooks exposes no paid or outstanding amount")
+                      ? t.finance.outstandingExposesNote
+                      : receivables.data.outstanding_status,
+                  )}
                 </p>
               )}
               {receivables.data && (
                 <DataTable
                   columns={[
-                    { key: "customer", header: "Customer", render: (row: CustomerReceivable) => row.customer_name ?? row.customer_code },
-                    { key: "invoices", header: "Invoices", align: "right", render: (row: CustomerReceivable) => number(row.invoice_count) },
-                    { key: "invoiced", header: "Invoiced", align: "right", render: (row: CustomerReceivable) => money(row.total_invoiced) },
-                    { key: "oldest", header: "Oldest invoice", render: (row: CustomerReceivable) => isoDate(row.oldest_invoice_date) },
+                    {
+                      key: "customer",
+                      header: t.finance.columns.customer,
+                      render: (row: CustomerReceivable) => row.customer_name ?? row.customer_code,
+                    },
+                    {
+                      key: "invoices",
+                      header: t.finance.columns.invoices,
+                      align: "right",
+                      render: (row: CustomerReceivable) => number(row.invoice_count),
+                    },
+                    {
+                      key: "invoiced",
+                      header: t.finance.columns.invoiced,
+                      align: "right",
+                      render: (row: CustomerReceivable) => money(row.total_invoiced),
+                    },
+                    {
+                      key: "oldest",
+                      header: t.finance.columns.oldestInvoice,
+                      render: (row: CustomerReceivable) => isoDate(row.oldest_invoice_date),
+                    },
                     {
                       key: "outstanding",
-                      header: "Outstanding",
+                      header: t.finance.columns.outstanding,
                       align: "right",
                       render: (row: CustomerReceivable) =>
-                        row.outstanding_amount === null ? "Unavailable" : money(row.outstanding_amount),
+                        row.outstanding_amount === null ? t.finance.unavailable : money(row.outstanding_amount),
                     },
                   ]}
                   rows={receivables.data.customers}
                   rowKey={(row) => row.customer_code}
                   onRowClick={(row) => row.customer_id && setDrilldownId(row.customer_id)}
-                  rowLabel={(row) => `Invoices for ${row.customer_name ?? row.customer_code}`}
+                  rowLabel={(row) => t.finance.invoicesForCustomerRowAria(row.customer_name ?? row.customer_code)}
                 />
               )}
             </>
@@ -250,6 +287,7 @@ function CustomerReceivableDrawer({
 }) {
   const [detail, setDetail] = useState<CustomerReceivableDetail | null>(null);
   const [error, setError] = useState("");
+  const t = useT();
 
   const load = useCallback(async () => {
     try {
@@ -259,62 +297,70 @@ function CustomerReceivableDrawer({
         onSessionLost();
         return;
       }
-      setError(reason instanceof Error ? reason.message : "Could not load this customer's invoices");
+      setError(formatApiError(reason, t).message);
     }
-  }, [customerId, onSessionLost]);
+  }, [customerId, onSessionLost, t]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   return (
-    <div className="accounting-overlay" role="dialog" aria-label={detail ? `Invoices for ${detail.customer_name}` : "Invoices"}>
+    <div
+      className="accounting-overlay"
+      role="dialog"
+      aria-label={detail ? t.finance.customerInvoicesAria(detail.customer_name) : t.finance.stats.invoices}
+    >
       <div className="accounting-panel">
         <header>
           <div>
-            <h2>{detail?.customer_name ?? "Loading…"}</h2>
+            <h2>{detail?.customer_name ?? t.common.loading}</h2>
           </div>
           <button className="secondary-button" type="button" onClick={onClose}>
-            Close
+            {t.common.close}
           </button>
         </header>
         {error && <ErrorState>{error}</ErrorState>}
         {!detail ? (
-          <p className="loading-state">Loading invoices…</p>
+          <p className="loading-state">{t.finance.loadingInvoices}</p>
         ) : (
           <>
             <dl className="accounting-facts">
               <div>
-                <dt>Invoices</dt>
+                <dt>{t.finance.stats.invoices}</dt>
                 <dd>{number(detail.invoice_count)}</dd>
               </div>
               <div>
-                <dt>Total invoiced</dt>
+                <dt>{t.finance.columns.invoiced}</dt>
                 <dd>{money(detail.total_invoiced)}</dd>
               </div>
               <div>
-                <dt>Outstanding</dt>
+                <dt>{t.finance.columns.outstanding}</dt>
                 <dd>{detail.total_outstanding === null ? "—" : money(detail.total_outstanding)}</dd>
               </div>
             </dl>
             {detail.total_outstanding === null && (
-              <p className="accounting-note">{detail.outstanding_status}.</p>
+              <p className="accounting-note">
+                {detail.outstanding_status?.startsWith("EasyBooks exposes no paid or outstanding amount")
+                  ? t.finance.outstandingExposesNote
+                  : detail.outstanding_status}.
+              </p>
             )}
             {detail.invoices.length === 0 ? (
-              <EmptyState>No invoices for this customer.</EmptyState>
+              <EmptyState>{t.finance.noInvoicesForCustomer}</EmptyState>
             ) : (
               <DataTable
                 columns={[
-                  { key: "invoice", header: "Invoice", render: (row) => row.invoice_number ?? row.sales_document_id },
-                  { key: "date", header: "Date", render: (row) => isoDate(row.document_date) },
-                  { key: "amount", header: "Amount", align: "right", render: (row) => money(row.total_amount) },
+                  { key: "invoice", header: t.finance.stats.invoices, render: (row) => row.invoice_number ?? row.sales_document_id },
+                  { key: "date", header: t.finance.columns.date, render: (row) => isoDate(row.document_date) },
+                  { key: "amount", header: t.finance.columns.amount, align: "right", render: (row) => money(row.total_amount) },
                   {
                     key: "outstanding",
-                    header: "Outstanding",
+                    header: t.finance.columns.outstanding,
                     align: "right",
-                    render: (row) => (row.outstanding_amount === null ? "Unavailable" : money(row.outstanding_amount)),
+                    render: (row) => (row.outstanding_amount === null ? t.finance.unavailable : money(row.outstanding_amount)),
                   },
-                  { key: "order", header: "Linked order", render: (row) => row.linked_order_numbers.join(", ") || "—" },
+                  { key: "order", header: t.finance.columns.linkedOrder, render: (row) => row.linked_order_numbers.join(", ") || "—" },
                 ]}
                 rows={detail.invoices}
                 rowKey={(row) => row.sales_document_id}

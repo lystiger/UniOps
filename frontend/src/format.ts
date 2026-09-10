@@ -38,15 +38,24 @@ export function timestamp(value: string | null | undefined): string {
   return dateTimeFormatter.format(new Date(value));
 }
 
-/** Wall-clock duration between two ISO timestamps, e.g. "2m 14s". Empty if
+/** Wall-clock duration between two ISO timestamps, e.g. "2m 14s" or "2 phút 14 giây". Empty if
  * either end is missing — never guessed from a run still in progress. */
-export function duration(start: string | null | undefined, end: string | null | undefined): string {
+export function duration(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  locale: "vi" | "en" = "vi",
+): string {
   if (!start || !end) return "—";
   const ms = new Date(end).getTime() - new Date(start).getTime();
   if (!Number.isFinite(ms) || ms < 0) return "—";
   const totalSeconds = Math.round(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
+  if (locale === "vi") {
+    if (minutes > 0 && seconds > 0) return `${minutes} phút ${seconds} giây`;
+    if (minutes > 0) return `${minutes} phút`;
+    return `${seconds} giây`;
+  }
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 

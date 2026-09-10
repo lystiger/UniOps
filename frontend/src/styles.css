@@ -2423,3 +2423,79 @@ input[inputmode="decimal"] {
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   Language Switcher & i18n
+   ========================================================================== */
+
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lang-btn {
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-control);
+  transition: background-color var(--motion-fast), color var(--motion-fast);
+  line-height: 1;
+}
+
+.lang-btn:hover {
+  color: var(--ink);
+  background: var(--paper-sunk);
+}
+
+.lang-btn.active {
+  color: var(--accent);
+  background: rgba(23, 107, 58, 0.1);
+  font-weight: 600;
+}
+
+.lang-separator {
+  color: var(--line);
+  font-size: 11px;
+  user-select: none;
+}
+
+.sign-in-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.sign-in-language-switcher {
+  background: var(--paper-sunk);
+  padding: 3px 4px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--line);
+}
+
+.settings-language-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+}
+
+.settings-section-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.settings-language-switcher {
+  background: var(--paper-sunk);
+  padding: 2px 4px;
+  border-radius: var(--radius-control);
+}
+

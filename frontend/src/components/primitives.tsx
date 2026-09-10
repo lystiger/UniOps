@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { latestSyncRuns, syncStatusLabel, syncStatusTone, timestamp } from "../format";
+import { latestSyncRuns, syncStatusTone, timestamp } from "../format";
 import type { SyncRun } from "../types";
 
 /**
@@ -197,28 +197,31 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
 
 // --- SyncStatus ---------------------------------------------------------
 
+import { useT } from "../i18n";
+
 /** Compact "last sync" line used on Overview and Finance. The Data page shows
  * the fuller picture; this is the one fact everywhere else needs. */
 export function SyncStatus({ runs, loading }: { runs: SyncRun[] | null; loading: boolean }) {
+  const t = useT();
   if (loading) {
-    return <span className="sync-status">Checking EasyBooks sync…</span>;
+    return <span className="sync-status">{t.sync.checking}</span>;
   }
   if (!runs || runs.length === 0) {
-    return <span className="sync-status">No EasyBooks sync has run yet</span>;
+    return <span className="sync-status">{t.sync.noSyncRunYet}</span>;
   }
   const { lastSuccess, lastAttempt } = latestSyncRuns(runs);
   if (!lastSuccess) {
     return (
       <span className="sync-status">
-        Last EasyBooks sync attempt {timestamp(lastAttempt?.started_at)} —{" "}
-        <Status label={syncStatusLabel[lastAttempt!.status]} tone={syncStatusTone[lastAttempt!.status]} />
+        {t.sync.lastSyncAttempt(timestamp(lastAttempt?.started_at))} —{" "}
+        <Status label={t.sync.status[lastAttempt!.status]} tone={syncStatusTone[lastAttempt!.status]} />
       </span>
     );
   }
   return (
     <span className="sync-status">
-      Last EasyBooks sync: {timestamp(lastSuccess.started_at)}{" "}
-      <Status label={syncStatusLabel[lastSuccess.status]} tone={syncStatusTone[lastSuccess.status]} />
+      {t.sync.lastSync(timestamp(lastSuccess.started_at))}{" "}
+      <Status label={t.sync.status[lastSuccess.status]} tone={syncStatusTone[lastSuccess.status]} />
     </span>
   );
 }

@@ -1,37 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, UnauthorizedError } from "../api";
+import { api, formatApiError, UnauthorizedError } from "../api";
 import { isoDate, money } from "../format";
+import { useT } from "../i18n";
 import type { AccountingStatus, InvoiceCandidate, Order, OrderAccounting } from "../types";
 
-const accountingMeta: Record<
-  AccountingStatus,
-  { label: string; symbol: string; tone: "draft" | "pending" | "accepted" }
-> = {
-  NOT_INVOICED: { label: "Not invoiced", symbol: "●", tone: "draft" },
-  INVOICE_CANDIDATE: { label: "Invoice candidate", symbol: "●", tone: "pending" },
-  INVOICED: { label: "Invoiced", symbol: "✓", tone: "accepted" },
-};
-
-const accountingLabels: Record<AccountingStatus, string> = {
-  NOT_INVOICED: "Not invoiced",
-  INVOICE_CANDIDATE: "Invoice candidate",
-  INVOICED: "Invoiced",
-};
-
-const paymentLabels: Record<string, string> = {
-  UNKNOWN: "Unknown",
-  UNPAID: "Unpaid",
-  PARTIALLY_PAID: "Partially paid",
-  PAID: "Paid",
+const statusToneMeta: Record<AccountingStatus, { symbol: string; tone: "draft" | "pending" | "accepted" }> = {
+  NOT_INVOICED: { symbol: "●", tone: "draft" },
+  INVOICE_CANDIDATE: { symbol: "●", tone: "pending" },
+  INVOICED: { symbol: "✓", tone: "accepted" },
 };
 
 export function AccountingBadge({ status }: { status: AccountingStatus | null }) {
+  const t = useT();
   if (!status) return null;
-  const meta = accountingMeta[status] ?? {
-    label: status,
+  const meta = statusToneMeta[status] ?? {
     symbol: "●",
     tone: "draft" as const,
   };
+  const label = t.accounting.status[status] ?? status;
   return (
     <span
       className={`accounting-badge accounting-${status.toLowerCase()} accounting-tone-${meta.tone}`}
@@ -39,7 +25,7 @@ export function AccountingBadge({ status }: { status: AccountingStatus | null })
       <span className="accounting-symbol" aria-hidden="true">
         {meta.symbol}
       </span>
-      <span>{meta.label}</span>
+      <span>{label}</span>
     </span>
   );
 }
@@ -61,6 +47,7 @@ export function AccountingPanel({
   const [candidates, setCandidates] = useState<InvoiceCandidate[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const t = useT();
 
   const load = useCallback(async () => {
     setError("");
@@ -76,9 +63,9 @@ export function AccountingPanel({
         onSessionLost();
         return;
       }
-      setError(reason instanceof Error ? reason.message : "Could not load accounting");
+      setError(formatApiError(reason, t).message);
     }
-  }, [order.id, onSessionLost]);
+  }, [order.id, onSessionLost, t]);
 
   useEffect(() => {
     load();
@@ -96,54 +83,58 @@ export function AccountingPanel({
         onSessionLost();
         return;
       }
-      setError(reason instanceof Error ? reason.message : "That did not work");
+      setError(formatApiError(reason, t).message);
     } finally {
       setBusy("");
     }
   }
 
   return (
-    <div className="accounting-overlay" role="dialog" aria-label={`Accounting for ${order.order_number}`}>
+    <div className="accounting-overlay" role="dialog" aria-label={t.accounting.dialogAria(order.order_number)}>
       <div className="accounting-panel">
         <header>
           <div>
             <h2>{order.order_number}</h2>
           </div>
           <button className="secondary-button" type="button" onClick={onClose}>
-            Close
+            {t.common.close}
           </button>
         </header>
 
         {error && <div className="message error" role="alert">{error}</div>}
         {!accounting ? (
-          <p className="loading-state">Loading accounting…</p>
+          <p className="loading-state">{t.accounting.loading}</p>
         ) : (
           <>
             <dl className="accounting-facts">
               <div>
-                <dt>Production</dt>
+                <dt>{t.accounting.facts.production}</dt>
                 <dd>{accounting.lifecycle_status}</dd>
               </div>
               <div>
-                <dt>Accounting</dt>
-                <dd>{accountingLabels[accounting.accounting_status]}</dd>
+                <dt>{t.accounting.facts.accounting}</dt>
+                <dd>{t.accounting.status[accounting.accounting_status] ?? accounting.accounting_status}</dd>
               </div>
               <div>
-                <dt>Payment</dt>
-                <dd>{paymentLabels[accounting.payment_status] ?? accounting.payment_status}</dd>
+                <dt>{t.accounting.facts.payment}</dt>
+                <dd>{t.accounting.paymentStatus[accounting.payment_status] ?? accounting.payment_status}</dd>
               </div>
               <div>
-                <dt>Outstanding</dt>
+                <dt>{t.accounting.facts.outstanding}</dt>
                 <dd>{money(accounting.outstanding_amount)}</dd>
               </div>
             </dl>
             {accounting.outstanding_amount === null && (
-              <p className="accounting-note">{accounting.outstanding_status}.</p>
+              <p className="accounting-note">
+                {accounting.outstanding_status?.startsWith("EasyBooks exposes no paid or outstanding amount")
+                  ? t.accounting.outstandingExposesNote
+                  : accounting.outstanding_status}.
+              </p>
             )}
 
-            <h3>Linked invoices</h3>
+            <h3>{t.accounting.linkedInvoices}</h3>
             {accounting.invoices.length === 0 ? (
-              <p className="empty-column">No invoice linked to this order.</p>
+              <p className="empty-column">{t.accounting.noInvoiceLinked}</p>
             ) : (
               <ul className="invoice-list">
                 {accounting.invoices.map((invoice) => (
@@ -151,9 +142,9 @@ export function AccountingPanel({
                     <div>
                       <strong>{invoice.invoice_number ?? invoice.sales_document_id}</strong>
                       <small>
-                        {invoice.document_date ? isoDate(invoice.document_date) : "no date"} ·{" "}
+                        {invoice.document_date ? isoDate(invoice.document_date) : t.accounting.noDate} ·{" "}
                         {money(invoice.total_amount)} · {invoice.link_method}
-                        {invoice.created_by ? ` · by ${invoice.created_by}` : ""}
+                        {invoice.created_by ? ` · ${t.accounting.byUser(invoice.created_by)}` : ""}
                       </small>
                     </div>
                     {canWrite && (
@@ -164,7 +155,7 @@ export function AccountingPanel({
                           act(invoice.link_id, () => api.unlinkInvoice(order.id, invoice.link_id))
                         }
                       >
-                        {busy === invoice.link_id ? "Removing…" : "Unlink"}
+                        {busy === invoice.link_id ? t.accounting.actions.removing : t.accounting.actions.unlink}
                       </button>
                     )}
                   </li>
@@ -174,11 +165,11 @@ export function AccountingPanel({
 
             {candidates.length > 0 && (
               <>
-                <h3>Possible invoices</h3>
+                <h3>{t.accounting.possibleInvoices}</h3>
                 <p className="accounting-note">
                   {candidates.length > 1
-                    ? "More than one invoice fits. Choose the right one; UniOps will not guess."
-                    : "Confirm only if this is the right invoice."}
+                    ? t.accounting.multipleCandidatesNote
+                    : t.accounting.singleCandidateNote}
                 </p>
                 <ul className="invoice-list">
                   {candidates.map((candidate) => (
@@ -186,8 +177,8 @@ export function AccountingPanel({
                       <div>
                         <strong>{candidate.invoice_number ?? candidate.source_id}</strong>
                         <small>
-                          {candidate.document_date ? isoDate(candidate.document_date) : "no date"} ·{" "}
-                          {money(candidate.total_amount)} · confidence {candidate.confidence}
+                          {candidate.document_date ? isoDate(candidate.document_date) : t.accounting.noDate} ·{" "}
+                          {money(candidate.total_amount)} · {t.accounting.confidence} {candidate.confidence}
                         </small>
                       </div>
                       {canWrite && (
@@ -200,7 +191,7 @@ export function AccountingPanel({
                             )
                           }
                         >
-                          {busy === candidate.sales_document_id ? "Linking…" : "Link"}
+                          {busy === candidate.sales_document_id ? t.accounting.actions.linking : t.accounting.actions.link}
                         </button>
                       )}
                     </li>
@@ -209,7 +200,7 @@ export function AccountingPanel({
               </>
             )}
             <p className="accounting-note">
-              Linking records the match in UniOps only. EasyBooks is never changed.
+              {t.accounting.linkNote}
             </p>
           </>
         )}

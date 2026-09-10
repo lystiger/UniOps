@@ -17,25 +17,117 @@ import type {
   SyncRun,
   User,
 } from "./types";
+import type { Dictionary } from "./i18n/types";
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+  readonly params: Record<string, unknown>;
+  readonly detail: string;
+
+  constructor(
+    status: number,
+    detail: string,
+    code: string | null = null,
+    params: Record<string, unknown> = {},
+  ) {
+    super(detail);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.params = params;
+    this.detail = detail;
+  }
+}
 
 /** The session is missing or expired. The app answers this by showing sign-in. */
-export class UnauthorizedError extends Error {}
+export class UnauthorizedError extends ApiError {
+  constructor(
+    detail: string,
+    code: string | null = "AUTH_REQUIRED",
+    params: Record<string, unknown> = {},
+  ) {
+    super(401, detail, code, params);
+    this.name = "UnauthorizedError";
+  }
+}
+
+export function formatApiError(
+  err: unknown,
+  t: Dictionary,
+  locale?: "vi" | "en",
+): { message: string; detail?: string } {
+  let activeLocale = locale;
+  if (!activeLocale && typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("uniops.locale");
+      if (saved === "vi" || saved === "en") activeLocale = saved;
+    } catch {
+      // ignore
+    }
+  }
+  if (!activeLocale) activeLocale = "vi";
+
+  if (err instanceof ApiError) {
+    if (err.code === "NETWORK_ERROR") {
+      return { message: t.errors.networkError, detail: err.detail };
+    }
+    if (err.code && err.code in t.errors) {
+      const entry = t.errors[err.code as keyof typeof t.errors];
+      const msg = typeof entry === "function" ? (entry as (p: unknown) => string)(err.params) : entry;
+      return { message: msg, detail: err.detail };
+    }
+    // If code is unknown or missing:
+    // In English, retain detail for backwards compatibility with existing mocks/tests.
+    // In Vietnamese: per spec, never show English detail as main text; show localized generic message.
+    const message = activeLocale === "en" && err.detail ? err.detail : t.errors.generic;
+    return { message, detail: err.detail };
+  }
+  if (err instanceof Error) {
+    return { message: err.message || t.errors.generic, detail: err.message };
+  }
+  return { message: t.errors.generic };
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    ...init,
-    // The session lives in an HttpOnly cookie, so it has to be sent explicitly
-    // for anything other than a plain same-origin default.
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...init,
+      // The session lives in an HttpOnly cookie, so it has to be sent explicitly
+      // for anything other than a plain same-origin default.
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...init?.headers },
+    });
+  } catch {
+    throw new ApiError(0, "Cannot reach the server", "NETWORK_ERROR", {});
+  }
+
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: "Request failed" }));
-    const detail = typeof body.detail === "string" ? body.detail : "Check the entered values";
+    const detail =
+      typeof body.detail === "string"
+        ? body.detail
+        : Array.isArray(body.detail)
+          ? JSON.stringify(body.detail)
+          : "Check the entered values";
+    const code =
+      typeof body.code === "string"
+        ? body.code
+        : response.status === 422
+          ? "REQUEST_INVALID"
+          : null;
+    const params =
+      body.params && typeof body.params === "object" && !Array.isArray(body.params)
+        ? (body.params as Record<string, unknown>)
+        : {};
+
     // A 401 on sign-in means the credentials were wrong and the reason belongs
     // on screen; a 401 anywhere else means the session ended. Both carry the
     // server's wording, and only the type tells the app which happened.
-    throw response.status === 401 ? new UnauthorizedError(detail) : new Error(detail);
+    throw response.status === 401
+      ? new UnauthorizedError(detail, code, params)
+      : new ApiError(response.status, detail, code, params);
   }
   if (response.status === 204) {
     return undefined as T;
