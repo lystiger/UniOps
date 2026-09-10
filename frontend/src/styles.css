@@ -859,24 +859,25 @@ input[inputmode="decimal"] {
   animation: loading-logo-float 3.2s ease-in-out 900ms infinite;
 }
 
+/* Splash parts are visible by default. Each entrance animation fills
+   backwards (`both`), so its first frame hides the part only during its own
+   delay. With animations off (prefers-reduced-motion) nothing is left hidden. */
 .loading-logo-cup {
-  opacity: 0;
-  transform: translateY(6px);
-  animation: loading-fade-up 500ms ease-out 80ms forwards;
+  animation: loading-fade-up 500ms ease-out 80ms both;
 }
 
 .loading-logo-leaf {
-  opacity: 0;
   transform-origin: 32px 20px;
+  /* Only the grow fills backwards: a filled sway, listed later, would override
+     the grow's transform during its delay. */
   animation:
-    loading-leaf-grow 650ms cubic-bezier(0.34, 1.56, 0.64, 1) 260ms forwards,
+    loading-leaf-grow 650ms cubic-bezier(0.34, 1.56, 0.64, 1) 260ms both,
     loading-leaf-sway 3s ease-in-out 950ms infinite;
 }
 
 .loading-wordmark {
   font-size: 22px;
-  opacity: 0;
-  animation: loading-fade-up 500ms ease-out 380ms forwards;
+  animation: loading-fade-up 500ms ease-out 380ms both;
 }
 
 .loading-status {
@@ -892,8 +893,7 @@ input[inputmode="decimal"] {
   font-size: 13px;
   font-weight: 500;
   color: var(--ink-muted);
-  opacity: 0;
-  animation: loading-fade-up 500ms ease-out 560ms forwards;
+  animation: loading-fade-up 500ms ease-out 560ms both;
 }
 
 .loading-quote {
@@ -901,8 +901,26 @@ input[inputmode="decimal"] {
   margin: 0;
   padding: 0 16px;
   text-align: center;
-  opacity: 0;
-  animation: loading-fade-up 600ms ease-out 760ms forwards;
+  animation: loading-fade-up 600ms ease-out 760ms both;
+}
+
+/* Later opens: a quiet cover for the session check instead of the splash. */
+.session-check-pending {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+}
+
+.session-check-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-family: var(--font-compact);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-muted);
 }
 
 .loading-quote p {

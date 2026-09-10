@@ -1,11 +1,38 @@
+import { useEffect, useState } from "react";
 import { useLocale, useT } from "../i18n";
 import { quoteOfTheDay } from "../quotes";
+import { SESSION_CHECK_NOTE_DELAY_MS } from "../splash";
 
 /**
- * Shown while the app verifies the session cookie on load. Purely
- * decorative — no props, no state — so it stays cheap even though it
- * animates; `prefers-reduced-motion` (global rule in styles.css) turns
- * every animation here off.
+ * Covers the session check on a later open (see splash.ts). Blank at first so
+ * a fast check shows nothing; a short note appears only if the check is slow.
+ */
+export function SessionCheckPending() {
+  const t = useT();
+  const [showNote, setShowNote] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowNote(true), SESSION_CHECK_NOTE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="session-check-pending" role="status" aria-live="polite">
+      {showNote && (
+        <p className="session-check-note">
+          <span className="live-dot pulse" aria-hidden="true" />
+          {t.auth.verifyingSession}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The branded splash for a browser's first open (see splash.ts). Every part is
+ * visible by default and its entrance animation only hides it during its own
+ * delay, so `prefers-reduced-motion` (global rule in styles.css), which turns
+ * the animations off, still leaves a complete, static screen.
  */
 export function LoadingScreen() {
   const { locale } = useLocale();

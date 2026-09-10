@@ -3,12 +3,13 @@ import { api } from "./api";
 import { AccountMenu } from "./components/AccountMenu";
 import { DataView } from "./components/DataView";
 import { FinanceView } from "./components/FinanceView";
-import { LoadingScreen } from "./components/LoadingScreen";
+import { LoadingScreen, SessionCheckPending } from "./components/LoadingScreen";
 import { Login } from "./components/Login";
 import { NewOrder } from "./components/NewOrder";
 import { OrderBoard } from "./components/OrderBoard";
 import { OverviewView } from "./components/OverviewView";
 import { LocaleProvider, useT } from "./i18n";
+import { SPLASH_MIN_MS, hasSeenSplash, markSplashSeen } from "./splash";
 import { canWrite, type User } from "./types";
 
 type View = "board" | "new" | "overview" | "finance" | "data";
@@ -16,17 +17,37 @@ type View = "board" | "new" | "overview" | "finance" | "data";
 export function AppInner() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
+  // Decided once per page load: the full splash only on this browser's first open.
+  const [firstOpen] = useState(() => !hasSeenSplash());
   const [view, setView] = useState<View>("board");
   const [boardVersion, setBoardVersion] = useState(0);
   const t = useT();
 
   useEffect(() => {
+    let cancelled = false;
+    let timer: number | undefined;
+    const started = Date.now();
+    if (firstOpen) markSplashSeen();
     api
       .me()
-      .then(setUser)
-      .catch(() => setUser(null))
-      .finally(() => setChecking(false));
-  }, []);
+      .then((me) => {
+        if (!cancelled) setUser(me);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        // A first-open splash that vanished after a fast check would only flash.
+        const remaining = firstOpen ? SPLASH_MIN_MS - (Date.now() - started) : 0;
+        timer = window.setTimeout(() => {
+          if (!cancelled) setChecking(false);
+        }, Math.max(0, remaining));
+      });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [firstOpen]);
 
   // A session can end while any view is open, so any route that answers 401
   // returns the whole app to sign-in rather than showing an error on a page the
@@ -37,7 +58,7 @@ export function AppInner() {
   }, []);
 
   if (checking) {
-    return <LoadingScreen />;
+    return firstOpen ? <LoadingScreen /> : <SessionCheckPending />;
   }
   if (!user) {
     return <Login onSignedIn={setUser} />;
