@@ -109,4 +109,43 @@ describe("AccountingPanel", () => {
     expect(screen.queryByRole("button", { name: "Link" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Unlink" })).not.toBeInTheDocument();
   });
+
+  it("closes on Escape, like the settings menu and date picker", async () => {
+    route({
+      "/api/orders/order-1/accounting": () => json(notInvoiced),
+      "/api/orders/order-1/invoice-candidates": () => json([]),
+    });
+    const onClose = vi.fn();
+
+    render(<AccountingPanel order={order} canWrite onClose={onClose} onChanged={() => undefined} />);
+    await screen.findByText("Not invoiced");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes from the dimmed backdrop, but not from a press inside the panel", async () => {
+    route({
+      "/api/orders/order-1/accounting": () => json(notInvoiced),
+      "/api/orders/order-1/invoice-candidates": () => json([]),
+    });
+    const onClose = vi.fn();
+
+    render(<AccountingPanel order={order} canWrite onClose={onClose} onChanged={() => undefined} />);
+    const inside = await screen.findByText("Not invoiced");
+    const backdrop = screen.getByRole("dialog");
+    expect(backdrop).toHaveAttribute("aria-modal", "true");
+
+    fireEvent.mouseDown(inside);
+    fireEvent.click(inside);
+    // A text selection dragged out of the panel ends its click on the backdrop.
+    fireEvent.mouseDown(inside);
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.mouseDown(backdrop);
+    fireEvent.click(backdrop);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

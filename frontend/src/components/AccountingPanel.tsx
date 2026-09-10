@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatApiError, UnauthorizedError } from "../api";
 import { isoDate, money } from "../format";
 import { useT } from "../i18n";
@@ -89,8 +89,33 @@ export function AccountingPanel({
     }
   }
 
+  // The dimmed full-screen backdrop reads as dismissible, and the settings menu
+  // and date picker already close on Escape and outside click, so this does too.
+  // Only a press that starts on the backdrop counts: a text selection dragged
+  // out of the panel ends its click on the backdrop and must not close it.
+  const pressStartedOnBackdrop = useRef(false);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="accounting-overlay" role="dialog" aria-label={t.accounting.dialogAria(order.order_number)}>
+    <div
+      className="accounting-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t.accounting.dialogAria(order.order_number)}
+      onMouseDown={(event) => {
+        pressStartedOnBackdrop.current = event.target === event.currentTarget;
+      }}
+      onClick={(event) => {
+        if (pressStartedOnBackdrop.current && event.target === event.currentTarget) onClose();
+      }}
+    >
       <div className="accounting-panel">
         <header>
           <div>
