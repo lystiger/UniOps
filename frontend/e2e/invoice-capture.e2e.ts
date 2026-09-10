@@ -20,6 +20,10 @@ import { E2E_PASSWORD, E2E_USERNAME, readSeededFacts, type SeededFacts } from ".
  * Read lazily and once. Playwright loads this file before it starts the
  * webServer, and .facts.json does not exist until the seed inside it has run.
  */
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("uniops.locale", "en"));
+});
+
 let seeded: SeededFacts | null = null;
 function facts(): SeededFacts {
   seeded ??= readSeededFacts();

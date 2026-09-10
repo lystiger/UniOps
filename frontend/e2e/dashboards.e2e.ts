@@ -20,6 +20,10 @@ function facts(): SeededFacts {
   return seeded;
 }
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("uniops.locale", "en"));
+});
+
 async function signIn(page: Page) {
   await page.goto("/");
   await page.getByLabel("Username").fill(E2E_USERNAME);
@@ -103,6 +107,7 @@ test("DateRangeFilter displays unambiguously in en-US and vi-VN locales", async 
   for (const locale of ["en-US", "vi-VN"]) {
     const context = await browser.newContext({ locale });
     const page = await context.newPage();
+    await page.addInitScript(() => localStorage.setItem("uniops.locale", "en"));
     await signIn(page);
     await page.getByRole("button", { name: "Finance" }).click();
     await expect(page.getByRole("heading", { name: "Finance" })).toBeVisible();

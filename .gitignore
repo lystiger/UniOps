@@ -28,3 +28,4 @@ frontend/.playwright/
 frontend/ms-playwright/
 .playwright-cli/
 backups/
+output/

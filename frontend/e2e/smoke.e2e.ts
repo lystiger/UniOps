@@ -5,6 +5,10 @@ import { E2E_PASSWORD, E2E_USERNAME } from "./fixtures";
 /**
  * Harness proof only. The real user-flow specs live in their own files.
  */
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("uniops.locale", "en"));
+});
+
 test("the API is up and reports its version", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.ok()).toBeTruthy();
