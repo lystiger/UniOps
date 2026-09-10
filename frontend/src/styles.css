@@ -269,81 +269,299 @@ a:focus-visible {
   50% { transform: scale(1.3); opacity: 0.7; }
 }
 
-/* User Account Menu */
+/* User Settings & Account Menu */
 .account-menu {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
 }
 
-.account-identity {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  padding-right: 8px;
-  line-height: 1.2;
-}
-
-.account-identity strong {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.account-identity small {
-  font-family: var(--font-compact);
+.settings-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
   color: var(--ink-muted);
-  font-size: 11px;
-  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease;
 }
 
-.password-panel {
+.settings-trigger:hover,
+.settings-trigger.active {
+  background: var(--paper-sunk);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.settings-trigger:focus-visible {
+  outline: 2px solid var(--brand-green);
+  outline-offset: 1px;
+}
+
+.settings-trigger svg {
+  display: block;
+}
+
+/* Settings Dropdown Popover */
+.settings-dropdown {
+  display: none;
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 40;
-  width: min(320px, 90vw);
-  display: flex;
+  z-index: 50;
+  width: min(300px, 92vw);
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px;
   background: var(--paper-raised);
   color: var(--ink);
   border: 1px solid var(--line-strong);
   border-top: 3px solid var(--brand-green);
   border-radius: var(--radius-card);
   box-shadow: 0 12px 32px rgba(12, 27, 20, 0.12);
+  padding: 16px;
+  gap: 12px;
 }
 
-.password-panel p {
-  margin: 0;
-  font-size: 13px;
+.settings-dropdown.open {
+  display: flex;
+}
+
+/* User Identity Header */
+.settings-user-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--brand-tint);
+  color: var(--brand-dark);
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(30, 148, 69, 0.2);
+}
+
+.settings-user-meta {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  line-height: 1.25;
+}
+
+.settings-user-meta strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-user-handle {
+  font-size: 11.5px;
   color: var(--ink-muted);
-  line-height: 1.4;
+  font-family: var(--font-compact);
 }
 
-.password-panel label {
+/* Status Admin / Role Pill */
+.settings-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  width: fit-content;
+}
+
+.settings-role-badge .role-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.settings-role-badge.role-admin {
+  background: var(--brand-tint);
+  border: 1px solid rgba(30, 148, 69, 0.25);
+  color: var(--brand-dark);
+}
+.settings-role-badge.role-admin .role-dot {
+  background: var(--brand-green);
+}
+
+.settings-role-badge.role-office {
+  background: var(--status-accepted-bg);
+  border: 1px solid var(--status-accepted-border);
+  color: var(--status-accepted-text);
+}
+.settings-role-badge.role-office .role-dot {
+  background: var(--status-accepted);
+}
+
+.settings-role-badge.role-factory-read {
+  background: var(--status-pending-bg);
+  border: 1px solid var(--status-pending-border);
+  color: var(--status-pending-text);
+}
+.settings-role-badge.role-factory-read .role-dot {
+  background: var(--status-pending);
+}
+
+.settings-divider {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 0;
+}
+
+/* Menu Actions */
+.settings-actions {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.password-panel label span {
-  font-size: 12px;
+.settings-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--motion-fast), color var(--motion-fast);
+}
+
+.settings-action-btn:hover {
+  background: var(--paper-sunk);
+}
+
+.settings-action-btn.active {
+  background: var(--paper-sunk);
+  color: var(--brand-dark);
+  font-weight: 600;
+}
+
+.settings-action-btn.danger {
+  color: var(--status-rejected-text);
+}
+
+.settings-action-btn.danger:hover {
+  background: var(--status-rejected-bg);
+  color: var(--status-rejected);
+}
+
+.settings-action-btn svg {
+  flex-shrink: 0;
+}
+
+.settings-action-chevron {
+  margin-left: auto;
+  transition: transform var(--motion-fast);
+}
+
+.settings-action-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+/* Password Subpanel & Form */
+.settings-password-subpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--paper-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
+.settings-password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-password-form p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  line-height: 1.35;
+}
+
+.settings-password-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-password-form label span {
+  font-size: 11px;
   font-weight: 600;
   color: var(--ink-muted);
 }
 
-.password-panel input {
-  padding: 8px 10px;
+.settings-password-form input {
+  padding: 7px 10px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
   background: var(--paper-raised);
+  font-size: 13px;
 }
 
-.password-panel .message {
-  margin: 0;
+.settings-password-form .password-input-wrapper input {
+  width: 100%;
+  padding-right: 36px;
+}
+
+.settings-password-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.primary-button.small,
+.secondary-button.small,
+.ghost-button.small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-muted);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.ghost-button:hover:not(:disabled) {
+  background: var(--paper-raised);
+  color: var(--ink);
 }
 
 /* ==========================================================================
