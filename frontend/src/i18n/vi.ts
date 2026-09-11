@@ -99,6 +99,10 @@ export const vi: Dictionary = {
     noDate: "không có ngày",
     byUser: (user: string) => `bởi ${user}`,
     confidence: "độ tin cậy",
+    linkMethod: {
+      MANUAL: "Liên kết thủ công",
+      CUSTOMER_DATE_AMOUNT: "Khớp theo khách hàng, ngày và số tiền",
+    },
     actions: {
       link: "Liên kết",
       linking: "Đang liên kết…",
@@ -131,6 +135,7 @@ export const vi: Dictionary = {
       showingAll: (total: number) => `Hiển thị toàn bộ ${total}`,
       viewAll: (total: number) => `Xem tất cả (${total})`,
       showTen: "Hiện 10",
+      unknownIssue: "Cần kiểm tra",
       columns: {
         reference: "Mã tham chiếu",
         customer: "Khách hàng",
@@ -284,6 +289,11 @@ export const vi: Dictionary = {
     },
     empty: "Chưa có đợt đồng bộ EasyBooks nào được thực hiện.",
     noRunsYet: "Chưa có bản ghi đồng bộ nào.",
+    syncError: {
+      documentsFailed: (n: number) => `Không thể đọc ${n} chứng từ từ EasyBooks`,
+      stopped: "Đồng bộ bị dừng do gặp lỗi",
+      technicalDetails: "Chi tiết kỹ thuật",
+    },
     errors: {
       loadHistory: "Không thể tải lịch sử đồng bộ dữ liệu.",
     },

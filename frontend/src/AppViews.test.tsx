@@ -57,7 +57,7 @@ const receivablesSummary = {
   total_overdue: null,
   unpaid_invoice_count: null,
   overdue_invoice_count: null,
-  outstanding_status: "EasyBooks exposes no paid or outstanding amount on any observed sales document",
+  outstanding_status: "NO_PAYMENT_SOURCE",
   due_status: "EasyBooks exposes no due date on any observed sales document",
   customers: [],
 };
@@ -379,7 +379,7 @@ describe("OverviewView Needs attention", () => {
           items: [
             {
               category: "INVOICE_WITHOUT_ORDER",
-              reference: "Invoice 1C26TSH/105",
+              reference: "1C26TSH/105",
               detail: "Invoice not linked to any UniOps order",
               customer_name: "CÔNG TY TNHH ABC",
               document_date: "2026-06-30",
@@ -429,7 +429,7 @@ describe("OverviewView Needs attention", () => {
     expect(screen.getByText("Invoice backlog & data issues (11)")).toBeInTheDocument();
 
     // Invoice renders as invoice reference, not as an order
-    expect(screen.getByText("Invoice 1C26TSH/105")).toBeInTheDocument();
+    expect(screen.getByText("1C26TSH/105")).toBeInTheDocument();
     // Customer column is filled
     expect(screen.getByText("CÔNG TY TNHH ABC")).toBeInTheDocument();
 
@@ -453,7 +453,7 @@ describe("OverviewView Needs attention", () => {
           items: [
             {
               category: "INVOICE_WITHOUT_ORDER",
-              reference: "Invoice 1C26TSH/105",
+              reference: "1C26TSH/105",
               detail: "Invoice not linked to any UniOps order",
               customer_name: "CÔNG TY TNHH ABC",
               document_date: "2026-06-30",

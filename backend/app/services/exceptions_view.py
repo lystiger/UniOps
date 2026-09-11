@@ -68,11 +68,12 @@ class ExceptionReport:
 
 
 def _format_invoice_ref(doc: SalesDocument) -> str:
+    # The identifier alone: the UI says what kind of reference it is, in the reader's language.
     if doc.invoice_series and doc.invoice_number:
-        return f"Invoice {doc.invoice_series}/{doc.invoice_number}"
+        return f"{doc.invoice_series}/{doc.invoice_number}"
     if doc.invoice_number:
-        return f"Invoice {doc.invoice_number}"
-    return f"Invoice {doc.source_document_number or doc.source_id}"
+        return doc.invoice_number
+    return doc.source_document_number or doc.source_id
 
 
 def _delivered_without_invoice(session: Session) -> list[ExceptionItem]:

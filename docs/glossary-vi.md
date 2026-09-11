@@ -82,6 +82,8 @@ This document establishes the terminology used in the Vietnamese localization (`
 | `accounting.confidence` | Confidence | Độ tin cậy | Mức độ khớp | `AccountingPanel` | Heuristic score (e.g. 100%, 80%) | DRAFT |
 | `accounting.suggested` | Suggested EasyBooks invoices | Hóa đơn EasyBooks gợi ý | Danh sách HĐ phù hợp | `AccountingPanel` | Heuristic match drawer section | DRAFT |
 | `accounting.outstandingExposesNote` | EasyBooks exposes no paid or outstanding amount on any observed sales document, and no payment source has been ingested | EasyBooks không thể hiện số tiền đã thanh toán hay còn nợ trên bất kỳ chứng từ bán hàng nào đã ghi nhận, và chưa đồng bộ nguồn thanh toán | Không có số liệu công nợ trên EasyBooks | `AccountingPanel`, `FinanceView` | **Accounting Critical**: Explains why outstanding is `—` rather than zero (Topic 1). | DRAFT |
+| `accounting.linkMethod.MANUAL` | Linked manually | Liên kết thủ công | Gán thủ công | `AccountingPanel` | Shown instead of the raw `MANUAL` code | DRAFT |
+| `accounting.linkMethod.CUSTOMER_DATE_AMOUNT` | Matched by customer, date and amount | Khớp theo khách hàng, ngày và số tiền | Khớp tự động | `AccountingPanel` | Shown instead of the raw `CUSTOMER_DATE_AMOUNT` code | DRAFT |
 
 ---
 
@@ -101,6 +103,9 @@ This document establishes the terminology used in the Vietnamese localization (`
 | `sync.status.PARTIAL` | Partial | Một phần | Thành công một phần | `format.ts`, `DataView` | Header stored, detail lines failed for some | DRAFT |
 | `sync.status.FAILED` | Failure | Thất bại | Lỗi đồng bộ | `format.ts`, `DataView` | Sync terminated with fatal error | DRAFT |
 | `sync.status.RUNNING` | Running | Đang đồng bộ | Đang chạy | `format.ts`, `DataView` | Ingestion job in progress | DRAFT |
+| `data.syncError.documentsFailed` | Could not read {n} document(s) from EasyBooks | Không thể đọc {n} chứng từ từ EasyBooks | — | `DataView` | "Chứng từ", not "hóa đơn": a sync reads every document type | DRAFT |
+| `data.syncError.stopped` | Sync stopped because of an error | Đồng bộ bị dừng do gặp lỗi | Đồng bộ thất bại | `DataView` | Fatal error before any document was counted as failed | DRAFT |
+| `data.syncError.technicalDetails` | Technical details | Chi tiết kỹ thuật | Chi tiết lỗi | `DataView` | Collapsed by default; holds EasyBooks' untranslated error text for debugging | DRAFT |
 
 ---
 
@@ -139,6 +144,7 @@ This document establishes the terminology used in the Vietnamese localization (`
 | `overview.attention.orderIssuesCount` | {n} order issue(s) | {n} vấn đề đơn hàng | {n} đơn hàng cần xử lý | `OverviewView` | Dynamic pluralization count | DRAFT |
 | `overview.attention.invoiceIssuesCount` | {n} invoice issue(s) | {n} vấn đề hóa đơn | {n} hóa đơn cần xử lý | `OverviewView` | Dynamic pluralization count | DRAFT |
 | `overview.overdueDelivery` | Overdue | Trễ hạn giao | Quá hạn giao hàng | `OrderBoard` | **Accounting Critical**: Delivery deadline has passed. Must NEVER be translated as "Quá hạn thanh toán" (Payment overdue). | DRAFT |
+| `overview.attention.unknownIssue` | Needs review | Cần kiểm tra | Cần xem lại | `OverviewView` | Fallback for an issue category the UI doesn't know yet, so the backend's English detail never shows | DRAFT |
 
 ### Attention Issues Categories (`overview.attentionIssues.*`)
 

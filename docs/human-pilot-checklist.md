@@ -94,7 +94,7 @@ uv run uniops user create --username factory_lead --role factory-read --full-nam
 1. Click **Overview** in the primary navigation.
 2. Locate the **Needs attention** section.
 3. Observe the breakdown between **Order exceptions** (delivered orders missing invoices, candidate ambiguities, customer/amount mismatches) and **Invoice backlog & data issues** (EasyBooks invoices not linked to UniOps orders, invoices missing customer code).
-4. Verify the **Reference** column displays specific references (e.g. `Invoice 1C26TSH/105` or `UO-20260910-XXXX`), and the **Customer** column shows the customer name.
+4. Verify the **Reference** column displays specific references (e.g. `1C26TSH/105` or `UO-20260910-XXXX`, with no English "Invoice" prefix in either language), and the **Customer** column shows the customer name.
 5. Invoices show vi-VN formatted date (`DD/MM/YYYY`) and VND amount; order rows show status and required date.
 6. Verify pagination indicator (e.g., "Showing 10 of 111") and test the **View all** / **Show 10** toggle.
 7. Note for Administrator / Owner: Historical unlinked invoices preceding UniOps adoption can be filtered by setting `UNIOPS_ORDER_TRACKING_SINCE=YYYY-MM-DD` in `.env`.

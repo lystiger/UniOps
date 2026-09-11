@@ -32,6 +32,23 @@ function count(value: number, emphasis?: "alert" | "warn"): ReactNode {
   return number(value);
 }
 
+/** A failed or partial sync, headlined in the UI language. EasyBooks' own error text
+ * can't be translated, so it waits behind a collapsed disclosure for whoever debugs it. */
+function SyncErrorNote({ run, t, compact = false }: { run: SyncRun; t: Dictionary; compact?: boolean }) {
+  if (!run.error_summary) return null;
+  const headline =
+    run.documents_failed > 0 ? t.data.syncError.documentsFailed(run.documents_failed) : t.data.syncError.stopped;
+  return (
+    <div className={compact ? "sync-error sync-error-compact" : "sync-error"}>
+      <p className="sync-error-headline">{headline}</p>
+      <details className="sync-error-details">
+        <summary>{t.data.syncError.technicalDetails}</summary>
+        <code>{run.error_summary}</code>
+      </details>
+    </div>
+  );
+}
+
 export function DataView({ onSessionLost }: { onSessionLost: () => void }) {
   const sync = useApiResource(() => api.syncRuns(20), [], onSessionLost);
   const runs = sync.data ?? [];
@@ -87,7 +104,7 @@ export function DataView({ onSessionLost }: { onSessionLost: () => void }) {
                   </dd>
                 </div>
               </dl>
-              {lastAttempt.error_summary && <p className="sync-health-error">{lastAttempt.error_summary}</p>}
+              <SyncErrorNote run={lastAttempt} t={t} />
             </div>
 
             <StatRow>
@@ -129,7 +146,7 @@ export function DataView({ onSessionLost }: { onSessionLost: () => void }) {
                 render: (row: SyncRun) => (
                   <>
                     <Status label={t.sync.status[row.status]} tone={syncStatusTone[row.status]} />
-                    {row.error_summary && <div className="sync-run-error">{row.error_summary}</div>}
+                    <SyncErrorNote run={row} t={t} compact />
                   </>
                 ),
               },

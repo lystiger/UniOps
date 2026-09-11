@@ -23,7 +23,7 @@ const notInvoiced = {
   accounting_status: "NOT_INVOICED",
   payment_status: "UNKNOWN",
   outstanding_amount: null,
-  outstanding_status: "EasyBooks exposes no paid or outstanding amount on any observed sales document",
+  outstanding_status: "NO_PAYMENT_SOURCE",
   invoices: [],
   candidate_count: 1,
 };
@@ -61,6 +61,42 @@ describe("AccountingPanel", () => {
     expect(await screen.findByText("Not invoiced")).toBeInTheDocument();
     expect(screen.getByText(/no paid or outstanding amount/)).toBeInTheDocument();
     expect(screen.getByText("No invoice linked to this order.")).toBeInTheDocument();
+  });
+
+  it("names the production stage and link method in words, never as raw codes", async () => {
+    route({
+      "/api/orders/order-1/accounting": () =>
+        json({
+          ...notInvoiced,
+          accounting_status: "INVOICED",
+          candidate_count: 0,
+          invoices: [
+            {
+              link_id: "link-1",
+              sales_document_id: "doc-1",
+              invoice_number: "HD000123",
+              invoice_series: "1C26TSH",
+              document_date: "2026-03-01",
+              total_amount: "10000.00",
+              link_method: "CUSTOMER_DATE_AMOUNT",
+              confidence: "1.0000",
+              created_by: "office",
+              payment_status: "UNKNOWN",
+              due_date: null,
+              due_status: "UNKNOWN",
+            },
+          ],
+        }),
+      "/api/orders/order-1/invoice-candidates": () => json([]),
+    });
+
+    render(<AccountingPanel order={order} canWrite onClose={() => undefined} onChanged={() => undefined} />);
+
+    expect(await screen.findByText("HD000123")).toBeInTheDocument();
+    expect(screen.getByText("Production").nextElementSibling).toHaveTextContent("Delivered");
+    expect(screen.getByText(/Matched by customer, date and amount/)).toBeInTheDocument();
+    expect(screen.queryByText("DELIVERED")).not.toBeInTheDocument();
+    expect(screen.queryByText(/CUSTOMER_DATE_AMOUNT/)).not.toBeInTheDocument();
   });
 
   it("lets a writer confirm a candidate and says EasyBooks is untouched", async () => {

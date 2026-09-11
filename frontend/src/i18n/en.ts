@@ -99,6 +99,10 @@ export const en: Dictionary = {
     noDate: "no date",
     byUser: (user: string) => `by ${user}`,
     confidence: "confidence",
+    linkMethod: {
+      MANUAL: "Linked manually",
+      CUSTOMER_DATE_AMOUNT: "Matched by customer, date and amount",
+    },
     actions: {
       link: "Link",
       linking: "Linking…",
@@ -131,6 +135,7 @@ export const en: Dictionary = {
       showingAll: (total: number) => `Showing all ${total}`,
       viewAll: (total: number) => `View all (${total})`,
       showTen: "Show 10",
+      unknownIssue: "Needs review",
       columns: {
         reference: "Reference",
         customer: "Customer",
@@ -284,6 +289,12 @@ export const en: Dictionary = {
     },
     empty: "No EasyBooks synchronization has run yet.",
     noRunsYet: "No synchronization runs recorded.",
+    syncError: {
+      documentsFailed: (n: number) =>
+        `Could not read ${n} ${n === 1 ? "document" : "documents"} from EasyBooks`,
+      stopped: "Sync stopped because of an error",
+      technicalDetails: "Technical details",
+    },
     errors: {
       loadHistory: "Could not load synchronization history.",
     },

@@ -134,7 +134,7 @@ export function AccountingPanel({
             <dl className="accounting-facts">
               <div>
                 <dt>{t.accounting.facts.production}</dt>
-                <dd>{accounting.lifecycle_status}</dd>
+                <dd>{t.orders.status[accounting.lifecycle_status]}</dd>
               </div>
               <div>
                 <dt>{t.accounting.facts.accounting}</dt>
@@ -149,12 +149,8 @@ export function AccountingPanel({
                 <dd>{money(accounting.outstanding_amount)}</dd>
               </div>
             </dl>
-            {accounting.outstanding_amount === null && (
-              <p className="accounting-note">
-                {accounting.outstanding_status?.startsWith("EasyBooks exposes no paid or outstanding amount")
-                  ? t.accounting.outstandingExposesNote
-                  : accounting.outstanding_status}.
-              </p>
+            {accounting.outstanding_amount === null && accounting.outstanding_status === "NO_PAYMENT_SOURCE" && (
+              <p className="accounting-note">{t.accounting.outstandingExposesNote}.</p>
             )}
 
             <h3>{t.accounting.linkedInvoices}</h3>
@@ -168,7 +164,7 @@ export function AccountingPanel({
                       <strong>{invoice.invoice_number ?? invoice.sales_document_id}</strong>
                       <small>
                         {invoice.document_date ? isoDate(invoice.document_date) : t.accounting.noDate} ·{" "}
-                        {money(invoice.total_amount)} · {invoice.link_method}
+                        {money(invoice.total_amount)} · {t.accounting.linkMethod[invoice.link_method]}
                         {invoice.created_by ? ` · ${t.accounting.byUser(invoice.created_by)}` : ""}
                       </small>
                     </div>

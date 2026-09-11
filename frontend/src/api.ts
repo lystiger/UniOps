@@ -84,7 +84,9 @@ export function formatApiError(
     return { message, detail: err.detail };
   }
   if (err instanceof Error) {
-    return { message: err.message || t.errors.generic, detail: err.message };
+    // A browser or runtime error is English whatever the UI language, so only English shows it as main text.
+    const message = activeLocale === "en" && err.message ? err.message : t.errors.generic;
+    return { message, detail: err.message };
   }
   return { message: t.errors.generic };
 }

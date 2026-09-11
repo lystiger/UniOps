@@ -211,15 +211,11 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
                 <Stat label={t.finance.stats.linkedToOrder} value={number(receivables.data?.linked_invoice_count)} />
                 <Stat label={t.finance.stats.unlinked} value={number(receivables.data?.unlinked_invoice_count)} />
               </StatRow>
-              {receivables.data && receivables.data.total_outstanding === null && (
-                <p className="section-note">
-                  {t.finance.outstandingBalanceNote(
-                    receivables.data.outstanding_status?.startsWith("EasyBooks exposes no paid or outstanding amount")
-                      ? t.finance.outstandingExposesNote
-                      : receivables.data.outstanding_status,
-                  )}
-                </p>
-              )}
+              {receivables.data &&
+                receivables.data.total_outstanding === null &&
+                receivables.data.outstanding_status === "NO_PAYMENT_SOURCE" && (
+                  <p className="section-note">{t.finance.outstandingBalanceNote(t.finance.outstandingExposesNote)}</p>
+                )}
               {receivables.data && (
                 <DataTable
                   columns={[
@@ -340,12 +336,8 @@ function CustomerReceivableDrawer({
                 <dd>{detail.total_outstanding === null ? "—" : money(detail.total_outstanding)}</dd>
               </div>
             </dl>
-            {detail.total_outstanding === null && (
-              <p className="accounting-note">
-                {detail.outstanding_status?.startsWith("EasyBooks exposes no paid or outstanding amount")
-                  ? t.finance.outstandingExposesNote
-                  : detail.outstanding_status}.
-              </p>
+            {detail.total_outstanding === null && detail.outstanding_status === "NO_PAYMENT_SOURCE" && (
+              <p className="accounting-note">{t.finance.outstandingExposesNote}.</p>
             )}
             {detail.invoices.length === 0 ? (
               <EmptyState>{t.finance.noInvoicesForCustomer}</EmptyState>

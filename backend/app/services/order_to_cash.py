@@ -102,11 +102,11 @@ class LinkNotFound(LookupError):
 
 
 # Stated once, used everywhere a payment-derived figure would otherwise be
-# invented. Changing this string means a payment source arrived.
-NO_PAYMENT_SOURCE = (
-    "EasyBooks exposes no paid or outstanding amount on any observed sales "
-    "document, and no payment source has been ingested"
-)
+# invented: EasyBooks exposes no paid or outstanding amount on any observed
+# sales document, and no payment source has been ingested. Sent as a code so
+# the UI explains it in the reader's language. Changing it means a payment
+# source arrived.
+NO_PAYMENT_SOURCE = "NO_PAYMENT_SOURCE"
 NO_DUE_DATE_SOURCE = "EasyBooks exposes no due date on any observed sales document"
 
 

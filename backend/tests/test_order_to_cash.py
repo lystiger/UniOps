@@ -338,7 +338,8 @@ def test_payment_and_due_state_stay_unknown_because_easybooks_says_nothing(
 
     assert body["payment_status"] == "UNKNOWN"
     assert body["outstanding_amount"] is None
-    assert "no paid or outstanding amount" in body["outstanding_status"]
+    # A code, not an English sentence: the UI explains it in the reader's language.
+    assert body["outstanding_status"] == "NO_PAYMENT_SOURCE"
     invoice = body["invoices"][0]
     assert invoice["payment_status"] == "UNKNOWN"
     assert invoice["due_date"] is None
@@ -631,14 +632,14 @@ def test_invoice_without_order_respects_tracking_date_and_carries_customer_name(
 
     # Check structure, reference format, customer name, date, and amount
     new_item = next(i for i in items_filtered if i.document_date == date(2026, 7, 1))
-    assert new_item.reference == "Invoice 1C26TSH/INV-NEW"
+    assert new_item.reference == "1C26TSH/INV-NEW"
     assert new_item.customer_name == f"Customer {CUSTOMER_CODE}"
     assert new_item.detail == "Invoice not linked to any UniOps order"
     assert new_item.total_amount == Decimal("2000.00")
     assert new_item.document_date == date(2026, 7, 1)
 
     undated_item = next(i for i in items_filtered if i.document_date is None)
-    assert undated_item.reference == "Invoice 1C26TSH/UNDATED1"
+    assert undated_item.reference == "1C26TSH/UNDATED1"
     assert undated_item.customer_name == "Undated Customer"
     assert undated_item.total_amount == Decimal("3000.00")
 
@@ -738,7 +739,7 @@ def test_exceptions_api_supports_order_tracking_since(session, office_client):
     groups = resp_filtered.json()["groups"]
     group_filtered = next(g for g in groups if g["category"] == "INVOICE_WITHOUT_ORDER")
     assert group_filtered["count"] == 1
-    assert group_filtered["items"][0]["reference"] == "Invoice 1C26TSH/INV-NEW2"
+    assert group_filtered["items"][0]["reference"] == "1C26TSH/INV-NEW2"
     assert group_filtered["items"][0]["customer_name"] == f"Customer {CUSTOMER_CODE}"
     assert group_filtered["items"][0]["document_date"] == "2026-07-01"
 

@@ -67,7 +67,8 @@ function renderExceptionIssue(row: AttentionRow, t: Dictionary): string {
     case "INVOICE_WITHOUT_CUSTOMER_CODE":
       return t.overview.attentionIssues.INVOICE_WITHOUT_CUSTOMER_CODE;
     default:
-      return row.detail;
+      // The backend's detail is English; a category this build doesn't know yet still reads in the UI language.
+      return t.overview.attention.unknownIssue;
   }
 }
 

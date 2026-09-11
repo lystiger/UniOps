@@ -115,8 +115,9 @@ test("linking the candidate captures the invoice against the order", async ({ pa
   await expect(linked).toContainText(facts().invoice_number);
   await expect(linked).toContainText(money(facts().invoice_total));
   // The seeded evidence is strong enough that the link records how it was
-  // matched rather than falling back to MANUAL.
-  await expect(linked).toContainText("CUSTOMER_DATE_AMOUNT");
+  // matched rather than falling back to a manual link, and says so in words.
+  await expect(linked).toContainText("Matched by customer, date and amount");
+  await expect(linked).not.toContainText("CUSTOMER_DATE_AMOUNT");
   await expect(linked).toContainText(`by ${E2E_USERNAME}`);
 
   // A linked order is no longer a candidate for anything.

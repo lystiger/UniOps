@@ -314,6 +314,12 @@ describe("i18n infrastructure", () => {
       const res = formatApiError(err, viDict, "vi");
       expect(res.message).toBe("Không thể kết nối đến máy chủ. Vui lòng kiểm tra đường truyền.");
     });
+
+    it("never shows a browser error's English text as the Vietnamese message", () => {
+      const res = formatApiError(new TypeError("Failed to fetch"), viDict, "vi");
+      expect(res.message).toBe("Đã có lỗi xảy ra. Vui lòng thử lại sau.");
+      expect(res.detail).toBe("Failed to fetch");
+    });
   });
 });
 
@@ -391,6 +397,8 @@ describe("Vietnamese view English leakage checks", () => {
     expect(screen.getByText("Đổi mật khẩu")).toBeInTheDocument();
     expect(screen.getByText("Đăng xuất")).toBeInTheDocument();
     expect(screen.getByText("Ngôn ngữ")).toBeInTheDocument();
+    expect(screen.getByText("VI")).toBeInTheDocument();
+    expect(screen.getByText("ENG")).toBeInTheDocument();
 
     expect(screen.queryByText("Change password")).not.toBeInTheDocument();
     expect(screen.queryByText("Sign out")).not.toBeInTheDocument();
@@ -464,7 +472,7 @@ describe("Vietnamese view English leakage checks", () => {
         total_overdue: null,
         unpaid_invoice_count: null,
         overdue_invoice_count: null,
-        outstanding_status: "Chưa có thông tin công nợ",
+        outstanding_status: "NO_PAYMENT_SOURCE",
         due_status: "",
         customers: [],
       }), { status: 200 }))
@@ -499,7 +507,7 @@ describe("Vietnamese view English leakage checks", () => {
             accounting_status: "NOT_INVOICED",
             payment_status: "UNKNOWN",
             outstanding_amount: null,
-            outstanding_status: "Chưa có thông tin công nợ",
+            outstanding_status: "NO_PAYMENT_SOURCE",
             invoices: [],
             candidate_count: 0,
           }),
@@ -549,6 +557,41 @@ describe("Vietnamese view English leakage checks", () => {
     expect(screen.queryByText("Last successful sync")).not.toBeInTheDocument();
   });
 
+  it("DataView explains a failed sync in Vietnamese and keeps EasyBooks' error text behind technical details", async () => {
+    const failedRun = {
+      id: "run-2",
+      mode: "live",
+      from_date: null,
+      to_date: null,
+      started_at: "2026-08-02T10:00:00Z",
+      finished_at: "2026-08-02T10:01:00Z",
+      status: "PARTIAL" as const,
+      documents_seen: 12,
+      documents_created: 0,
+      documents_updated: 0,
+      documents_unchanged: 9,
+      documents_failed: 3,
+      reconciliation_warnings: 0,
+      error_summary: "sales detail inv-9: detail endpoint timeout",
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify([failedRun]), { status: 200 }));
+
+    render(
+      <LocaleProvider>
+        <DataView onSessionLost={vi.fn()} />
+      </LocaleProvider>,
+    );
+
+    // Once in the health headline, once in the runs table.
+    expect(await screen.findAllByText("Không thể đọc 3 chứng từ từ EasyBooks")).toHaveLength(2);
+    const disclosures = screen.getAllByText("Chi tiết kỹ thuật");
+    expect(disclosures).toHaveLength(2);
+    for (const summary of disclosures) {
+      expect(summary.closest("details")).not.toHaveAttribute("open");
+    }
+    expect(screen.queryByText("Partial")).not.toBeInTheDocument();
+  });
+
   it("FinanceView renders in Vietnamese without leaking English UI strings", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : (input as Request).url;
@@ -590,7 +633,7 @@ describe("Vietnamese view English leakage checks", () => {
             total_overdue: null,
             unpaid_invoice_count: null,
             overdue_invoice_count: null,
-            outstanding_status: "Chưa có thông tin công nợ",
+            outstanding_status: "NO_PAYMENT_SOURCE",
             due_status: "",
             customers: [],
           }),

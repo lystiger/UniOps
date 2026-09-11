@@ -72,6 +72,11 @@ export interface Order {
   accounting_status: AccountingStatus | null;
 }
 
+export type LinkMethod = "MANUAL" | "CUSTOMER_DATE_AMOUNT";
+
+/** Why a payment-derived figure is null, as a code the UI explains in words. */
+export type OutstandingStatus = "NO_PAYMENT_SOURCE";
+
 export interface LinkedInvoice {
   link_id: string;
   sales_document_id: string;
@@ -79,7 +84,7 @@ export interface LinkedInvoice {
   invoice_series: string | null;
   document_date: string | null;
   total_amount: string;
-  link_method: string;
+  link_method: LinkMethod;
   confidence: string | null;
   created_by: string | null;
   payment_status: PaymentStatus;
@@ -90,13 +95,13 @@ export interface LinkedInvoice {
 export interface OrderAccounting {
   order_id: string;
   order_number: string;
-  lifecycle_status: string;
+  lifecycle_status: OrderStatus;
   order_total: string | null;
   accounting_status: AccountingStatus;
   payment_status: PaymentStatus;
   outstanding_amount: string | null;
-  /** Says in words why outstanding is null, so null is never read as "nothing owed". */
-  outstanding_status: string;
+  /** Why outstanding is null, so null is never read as "nothing owed". */
+  outstanding_status: OutstandingStatus;
   invoices: LinkedInvoice[];
   candidate_count: number;
 }
@@ -186,8 +191,8 @@ export interface Receivables {
   total_overdue: string | null;
   unpaid_invoice_count: number | null;
   overdue_invoice_count: number | null;
-  /** Says in words why the figures above are null. */
-  outstanding_status: string;
+  /** Why the figures above are null. */
+  outstanding_status: OutstandingStatus;
   due_status: string;
   customers: CustomerReceivable[];
 }
@@ -217,7 +222,7 @@ export interface CustomerReceivableDetail {
   oldest_invoice_date: string | null;
   total_outstanding: string | null;
   overdue_amount: string | null;
-  outstanding_status: string;
+  outstanding_status: OutstandingStatus;
   due_status: string;
   invoices: CustomerInvoice[];
 }

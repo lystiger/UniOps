@@ -68,6 +68,8 @@ test.describe("i18n locale flow & translations", () => {
     const settingsDialog = page.getByRole("dialog", { name: "Cài đặt tài khoản" });
     await expect(settingsDialog).toBeVisible();
     await expect(settingsDialog.getByText("Ngôn ngữ")).toBeVisible();
+    await expect(settingsDialog.getByText("VI")).toBeVisible();
+    await expect(settingsDialog.getByText("ENG")).toBeVisible();
 
     // Click English
     await settingsDialog.getByRole("button", { name: "English" }).click();

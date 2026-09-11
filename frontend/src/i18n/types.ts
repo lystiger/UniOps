@@ -1,6 +1,7 @@
 import type {
   AccountingStatus,
   ExceptionCategory,
+  LinkMethod,
   OrderStatus,
   PaymentStatus,
   Role,
@@ -127,6 +128,7 @@ export interface Dictionary {
     noDate: string;
     byUser: (user: string) => string;
     confidence: string;
+    linkMethod: Record<LinkMethod, string>;
     actions: {
       link: string;
       linking: string;
@@ -158,6 +160,8 @@ export interface Dictionary {
       showingAll: (total: number) => string;
       viewAll: (total: number) => string;
       showTen: string;
+      /** Issue text for a category this build doesn't know yet. */
+      unknownIssue: string;
       columns: {
         reference: string;
         customer: string;
@@ -301,6 +305,12 @@ export interface Dictionary {
     };
     empty: string;
     noRunsYet: string;
+    /** A failed sync in words; EasyBooks' raw error text sits behind `technicalDetails`. */
+    syncError: {
+      documentsFailed: (n: number) => string;
+      stopped: string;
+      technicalDetails: string;
+    };
     errors: {
       loadHistory: string;
     };

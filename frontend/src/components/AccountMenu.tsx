@@ -90,7 +90,7 @@ export function AccountMenu({ user, onSignedOut }: { user: User; onSignedOut: ()
 
         <div className="settings-language-section">
           <span className="settings-section-label">{t.auth.language}</span>
-          <LanguageSwitcher className="settings-language-switcher" />
+          <LanguageSwitcher className="settings-language-switcher" variant="short" />
         </div>
 
         <hr className="settings-divider" />
