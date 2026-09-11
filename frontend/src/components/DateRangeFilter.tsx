@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { isoDate } from "../format";
 import { useLocale, useT } from "../i18n";
 import type { Locale } from "../i18n/types";
+import { DateInput } from "./DateInput";
 
 export interface DateRangeFilterProps {
   fromDate: string;
@@ -163,22 +164,20 @@ export function DateRangeFilter({ fromDate, toDate, onChange }: DateRangeFilterP
       <div className="date-range-bar">
         <label className="date-range-input-label">
           <span>{t.dateFilter.from}</span>
-          <input
-            type="date"
+          <DateInput
             value={fromDate}
             max={toDate || undefined}
-            onChange={(e) => onChange({ fromDate: e.target.value, toDate })}
+            onChange={(value) => onChange({ fromDate: value, toDate })}
             onFocus={() => setIsOpen(true)}
           />
         </label>
 
         <label className="date-range-input-label">
           <span>{t.dateFilter.to}</span>
-          <input
-            type="date"
+          <DateInput
             value={toDate}
             min={fromDate || undefined}
-            onChange={(e) => onChange({ fromDate, toDate: e.target.value })}
+            onChange={(value) => onChange({ fromDate, toDate: value })}
             onFocus={() => setIsOpen(true)}
           />
         </label>

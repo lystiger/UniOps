@@ -404,6 +404,9 @@ export const en: Dictionary = {
     empty: "No data",
     required: "Required",
     status: "Status",
+    datePlaceholder: "dd/mm/yyyy",
+    invalidDate: "Not a valid date. Type day/month/year, e.g. 31/12/2026.",
+    dateOutOfRange: "This date is outside the allowed range.",
   },
   durationUnits: {
     minutes: (m: number) => `${m}m`,

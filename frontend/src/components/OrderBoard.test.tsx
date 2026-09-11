@@ -42,6 +42,8 @@ describe("OrderBoard", () => {
 
     expect(await screen.findByText("Fixture Customer")).toBeInTheDocument();
     expect(screen.getByText("Overdue")).toBeInTheDocument();
+    // The stored "20.0000" reads as a quantity, not a database value.
+    expect(screen.getByText("20 roll · Paper roll")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     await waitFor(() => expect(screen.getByText("Confirmed")).toBeInTheDocument());

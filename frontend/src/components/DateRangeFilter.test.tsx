@@ -10,10 +10,11 @@ describe("DateRangeFilter", () => {
     const fromInput = screen.getByLabelText("From");
     const toInput = screen.getByLabelText("To");
 
-    expect(fromInput).toHaveValue("2026-08-01");
-    expect(toInput).toHaveValue("2026-08-31");
+    // Day-first whatever the browser's locale; the parent still gets ISO dates.
+    expect(fromInput).toHaveValue("01/08/2026");
+    expect(toInput).toHaveValue("31/08/2026");
 
-    fireEvent.change(fromInput, { target: { value: "2026-08-10" } });
+    fireEvent.change(fromInput, { target: { value: "10/08/2026" } });
     expect(onChange).toHaveBeenCalledWith({ fromDate: "2026-08-10", toDate: "2026-08-31" });
   });
 

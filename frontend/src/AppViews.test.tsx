@@ -289,7 +289,7 @@ describe("FinanceView", () => {
     await screen.findAllByText("Documents");
     fetchMock.mockClear();
 
-    fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText("From"), { target: { value: "01/01/2026" } });
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(

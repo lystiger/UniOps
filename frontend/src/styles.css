@@ -59,6 +59,12 @@
   --radius-control: 6px;
   --motion-fast: 180ms;
 
+  /* Layout: the top bar's contents and every page share one centred column, so the logo
+     and the page edge line up and wide screens keep even margins on both sides. Used as
+     side padding on full-width elements, so `100%` is the viewport width. */
+  --content-max: 1440px;
+  --page-gutter: max(24px, 3vw, calc((100% - var(--content-max)) / 2));
+
   /* Backward Compatibility Aliases */
   --surface: var(--paper-raised);
   --ink-soft: var(--ink-muted);
@@ -122,7 +128,7 @@ a:focus-visible {
 
 .topbar {
   min-height: 64px;
-  padding: 0 max(24px, 3vw);
+  padding: 0 var(--page-gutter);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -405,7 +411,7 @@ a:focus-visible {
 }
 
 .settings-user-meta strong {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
@@ -414,7 +420,7 @@ a:focus-visible {
 }
 
 .settings-user-handle {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-muted);
   font-family: var(--font-compact);
 }
@@ -426,7 +432,7 @@ a:focus-visible {
   gap: 6px;
   padding: 3px 10px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   width: fit-content;
 }
@@ -486,7 +492,7 @@ a:focus-visible {
   background: transparent;
   border: none;
   border-radius: var(--radius-control);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--ink);
   cursor: pointer;
@@ -547,7 +553,7 @@ a:focus-visible {
 
 .settings-password-form p {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-muted);
   line-height: 1.35;
 }
@@ -559,7 +565,7 @@ a:focus-visible {
 }
 
 .settings-password-form label span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink-muted);
 }
@@ -569,7 +575,7 @@ a:focus-visible {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
   background: var(--paper-raised);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .settings-password-form .password-input-wrapper input {
@@ -587,7 +593,7 @@ a:focus-visible {
 .secondary-button.small,
 .ghost-button.small {
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .ghost-button {
@@ -613,9 +619,11 @@ a:focus-visible {
    Main Content Layout & Typography Hierarchy
    ========================================================================== */
 
+/* Same side padding as .topbar: on wide screens every page, the order board included, sits in
+   the centred column under the logo, so a row's label and its figure stay within one glance. */
 main {
   flex: 1;
-  padding: 32px max(24px, 3vw) 64px;
+  padding: 32px var(--page-gutter) 64px;
 }
 
 .page-heading {
@@ -650,7 +658,7 @@ h1 {
 .page-context {
   margin: 0;
   font-family: var(--font-compact);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink-muted);
 }
 
@@ -726,7 +734,7 @@ h1 {
   background: var(--paper-raised);
   border: 1px solid var(--line-strong);
   color: var(--ink);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -749,7 +757,7 @@ button:disabled {
   background: transparent;
   color: var(--status-rejected);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   transition: color var(--motion-fast) ease;
 }
@@ -765,7 +773,7 @@ button:disabled {
   background: transparent;
   border: 1px solid transparent;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   border-radius: var(--radius-sm);
@@ -787,7 +795,7 @@ label {
   display: grid;
   gap: 5px;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -854,7 +862,7 @@ input[inputmode="decimal"] {
   padding: 10px 14px;
   border-left: 3px solid;
   border-radius: 0 var(--radius-control) var(--radius-control) 0;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -1064,7 +1072,7 @@ input[inputmode="decimal"] {
 
 .board-column > header h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1082,7 +1090,7 @@ input[inputmode="decimal"] {
   border: 1px solid var(--line);
   color: var(--ink-muted);
   font-family: var(--font-compact);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -1099,7 +1107,9 @@ input[inputmode="decimal"] {
   border-radius: var(--radius-control);
   color: var(--ink-faint);
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
+  /* Evens out the two lines in a narrow column instead of leaving one word alone. */
+  text-wrap: balance;
 }
 
 /* ==========================================================================
@@ -1133,19 +1143,27 @@ input[inputmode="decimal"] {
   background: var(--status-rejected);
 }
 
+/* In a narrow column the badge drops under the order number instead of either one
+   breaking mid-word. */
 .card-topline {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 8px;
+}
+
+.card-topline .status-badge {
+  white-space: nowrap;
 }
 
 .order-number {
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .order-card h3 {
@@ -1160,7 +1178,7 @@ input[inputmode="decimal"] {
   min-height: 36px;
   margin-bottom: 10px;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
 }
 
@@ -1171,13 +1189,13 @@ input[inputmode="decimal"] {
   border-top: 1px solid var(--line);
   padding-top: 8px;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .due-row strong {
   color: var(--ink);
   font-family: var(--font-compact);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -1198,7 +1216,7 @@ input[inputmode="decimal"] {
   padding: 2px 7px;
   border-radius: 4px;
   font-family: var(--font-compact);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
   border: 1px solid;
@@ -1343,12 +1361,14 @@ input[inputmode="decimal"] {
   border-right: 1px solid var(--line);
   color: var(--ink-muted);
   font-family: var(--font-compact);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
+/* The price column gets enough room for "Đơn giá thỏa thuận" on one line at laptop width;
+   the description gives up the difference. */
 .line-fields {
-  grid-template-columns: minmax(170px, 1.2fr) minmax(180px, 1.5fr) minmax(90px, 0.6fr) minmax(75px, 0.5fr) minmax(120px, 0.8fr) auto;
+  grid-template-columns: minmax(170px, 1.2fr) minmax(180px, 1.3fr) minmax(90px, 0.6fr) minmax(75px, 0.5fr) minmax(150px, 1fr) auto;
   align-items: end;
   padding: 14px;
 }
@@ -1366,7 +1386,7 @@ input[inputmode="decimal"] {
 .form-footer p {
   margin: 0;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .catalog-panel {
@@ -1384,7 +1404,7 @@ input[inputmode="decimal"] {
 
 .catalog-panel > p:not(.eyebrow) {
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
   margin-bottom: 14px;
 }
 
@@ -1396,7 +1416,7 @@ input[inputmode="decimal"] {
   padding: 12px 0;
   cursor: pointer;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink);
 }
 
@@ -1468,7 +1488,7 @@ input[inputmode="decimal"] {
 }
 
 .sign-in-card label span {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink-muted);
 }
@@ -1592,7 +1612,7 @@ input[inputmode="decimal"] {
 
 .accounting-facts dt {
   font-family: var(--font-compact);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1609,7 +1629,7 @@ input[inputmode="decimal"] {
 
 .accounting-note {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink-muted);
   line-height: 1.4;
 }
@@ -1635,7 +1655,7 @@ input[inputmode="decimal"] {
 
 .invoice-list strong {
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--ink);
   letter-spacing: 0.01em;
@@ -1645,7 +1665,7 @@ input[inputmode="decimal"] {
   display: block;
   color: var(--ink-muted);
   font-family: var(--font-compact);
-  font-size: 12px;
+  font-size: 13px;
   margin-top: 2px;
 }
 
@@ -1675,14 +1695,14 @@ input[inputmode="decimal"] {
 
 .section-count {
   font-family: var(--font-compact);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-muted);
 }
 
 .section-note {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink-muted);
   line-height: 1.4;
 }
@@ -1709,7 +1729,7 @@ input[inputmode="decimal"] {
 
 .attention-group-title {
   font-family: var(--font-compact);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1721,7 +1741,7 @@ input[inputmode="decimal"] {
   align-items: center;
   justify-content: space-between;
   margin-top: 10px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 
@@ -1731,7 +1751,7 @@ input[inputmode="decimal"] {
   border-radius: var(--radius-control, 4px);
   padding: 4px 10px;
   color: var(--brand-green);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--motion-fast, 150ms) ease;
@@ -1792,7 +1812,7 @@ input[inputmode="decimal"] {
 
 .stat-label {
   font-family: var(--font-compact);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 
@@ -1805,14 +1825,14 @@ input[inputmode="decimal"] {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .data-table th {
   padding: 8px 14px 8px 0;
   text-align: left;
   font-family: var(--font-compact);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1881,7 +1901,7 @@ input[inputmode="decimal"] {
 }
 
 .date-range-input-label span {
-  font-size: 11.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-muted);
 }
@@ -1891,7 +1911,7 @@ input[inputmode="decimal"] {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
   background: var(--paper-raised);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink);
   transition: border-color var(--motion-fast) ease;
 }
@@ -1902,6 +1922,12 @@ input[inputmode="decimal"] {
   box-shadow: 0 0 0 2px var(--brand-tint);
 }
 
+/* A typed date that isn't a real day, or falls outside its range, once the field is left. */
+input[aria-invalid="true"],
+.date-range-input-label input[aria-invalid="true"] {
+  border-color: var(--status-rejected);
+}
+
 .dual-calendar-trigger {
   display: inline-flex;
   align-items: center;
@@ -1910,7 +1936,7 @@ input[inputmode="decimal"] {
   background: var(--paper-raised);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--ink);
   cursor: pointer;
@@ -1940,7 +1966,7 @@ input[inputmode="decimal"] {
 }
 
 .dual-calendar-selected-range {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--brand-dark);
 }
@@ -1996,7 +2022,7 @@ input[inputmode="decimal"] {
 }
 
 .presets-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2009,7 +2035,7 @@ input[inputmode="decimal"] {
   width: 100%;
   text-align: left;
   padding: 6px 10px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink-muted);
   background: transparent;
@@ -2076,7 +2102,7 @@ input[inputmode="decimal"] {
 }
 
 .cal-month-title {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink);
 }
@@ -2102,7 +2128,7 @@ input[inputmode="decimal"] {
 
 .month-grid-header {
   display: none;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   text-align: center;
   color: var(--ink);
@@ -2115,7 +2141,7 @@ input[inputmode="decimal"] {
 }
 
 .weekday-header {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink-faint);
   padding: 4px 0;
@@ -2139,7 +2165,7 @@ input[inputmode="decimal"] {
   margin: 0;
   background: transparent;
   border: none;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink);
   cursor: pointer;
@@ -2231,7 +2257,7 @@ input[inputmode="decimal"] {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--ink);
 }
 
@@ -2241,7 +2267,7 @@ input[inputmode="decimal"] {
   border-radius: 999px;
   background: var(--brand-tint);
   color: var(--brand-dark);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -2255,7 +2281,7 @@ input[inputmode="decimal"] {
 }
 
 .range-empty-text {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 
@@ -2303,7 +2329,7 @@ input[inputmode="decimal"] {
   align-items: center;
   gap: 7px;
   font-family: var(--font-compact);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 1.35;
   white-space: nowrap;
@@ -2351,7 +2377,7 @@ input[inputmode="decimal"] {
   margin: 0;
   padding: 20px 0;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .skeleton {
@@ -2380,7 +2406,7 @@ input[inputmode="decimal"] {
   align-items: center;
   gap: 8px;
   font-family: var(--font-compact);
-  font-size: 13px;
+  font-size: 14px;
   color: var(--ink-muted);
 }
 
@@ -2412,7 +2438,7 @@ input[inputmode="decimal"] {
   gap: 4px 28px;
   margin: 6px 0 0 20px;
   font-family: var(--font-compact);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .sync-health-facts div {
@@ -2446,7 +2472,7 @@ input[inputmode="decimal"] {
 .sync-error {
   max-width: 72ch;
   margin: 8px 0 0 20px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -2463,7 +2489,7 @@ input[inputmode="decimal"] {
 
 .sync-error-details summary {
   width: fit-content;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -2474,7 +2500,7 @@ input[inputmode="decimal"] {
   border-radius: var(--radius-control);
   background: var(--paper-sunk);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2483,7 +2509,7 @@ input[inputmode="decimal"] {
 .sync-error-compact {
   max-width: 36ch;
   margin: 4px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   white-space: normal;
 }
 
@@ -2626,7 +2652,7 @@ input[inputmode="decimal"] {
   background: transparent;
   border: none;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink-muted);
   cursor: pointer;
@@ -2649,7 +2675,7 @@ input[inputmode="decimal"] {
 
 .lang-separator {
   color: var(--line);
-  font-size: 11px;
+  font-size: 12px;
   user-select: none;
 }
 
@@ -2671,7 +2697,7 @@ input[inputmode="decimal"] {
 
 .sign-in-language-switcher .lang-btn,
 .settings-language-switcher .lang-btn {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   padding: 3px 6px;
@@ -2685,7 +2711,7 @@ input[inputmode="decimal"] {
 }
 
 .settings-section-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink-muted);
 }

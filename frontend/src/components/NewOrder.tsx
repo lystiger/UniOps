@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { api, formatApiError, UnauthorizedError } from "../api";
 import { useT } from "../i18n";
 import type { Customer, NewOrderLine, Product } from "../types";
+import { DateInput } from "./DateInput";
 
 const ignoreSessionLoss = () => undefined;
 
@@ -120,11 +121,11 @@ export function NewOrder({
               </label>
               <label>
                 <span>{t.newOrder.orderDate}</span>
-                <input type="date" value={orderDate} onChange={(event) => setOrderDate(event.target.value)} required />
+                <DateInput value={orderDate} onChange={setOrderDate} required />
               </label>
               <label>
                 <span>{t.newOrder.requiredDate}</span>
-                <input type="date" min={orderDate} value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} required />
+                <DateInput min={orderDate} value={requiredDate} onChange={setRequiredDate} required />
               </label>
             </div>
           </fieldset>

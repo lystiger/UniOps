@@ -26,6 +26,30 @@ export function number(value: number | null | undefined): string {
   return numberFormatter.format(value);
 }
 
+const quantityFormatter = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 4 });
+
+/** A stored decimal quantity without its storage padding: "1000.0000" reads "1.000", "12.5000" reads "12,5". */
+export function quantity(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? quantityFormatter.format(parsed) : String(value);
+}
+
+/** A typed day-first date as ISO `YYYY-MM-DD`: `31/12/2026`, `1/6/2026`, `.` or `-` separators, or
+ * `31122026`. Null unless it names a real calendar day, so 31/02 never rolls into March. */
+export function parseDisplayDate(text: string): string | null {
+  const trimmed = text.trim();
+  const match = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(trimmed) ?? /^(\d{2})(\d{2})(\d{4})$/.exec(trimmed);
+  if (!match) return null;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  if (year < 1000 || month < 1 || month > 12 || day < 1) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 /** An ISO date string (`YYYY-MM-DD`) as `dd/mm/yyyy`. */
 export function isoDate(value: string | null | undefined): string {
   if (!value) return "—";

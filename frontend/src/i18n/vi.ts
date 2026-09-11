@@ -403,6 +403,9 @@ export const vi: Dictionary = {
     empty: "Không có dữ liệu",
     required: "Bắt buộc",
     status: "Trạng thái",
+    datePlaceholder: "ngày/tháng/năm",
+    invalidDate: "Ngày không hợp lệ. Nhập theo dạng ngày/tháng/năm, ví dụ 31/12/2026.",
+    dateOutOfRange: "Ngày nằm ngoài khoảng cho phép.",
   },
   durationUnits: {
     minutes: (m: number) => `${m} phút`,

@@ -413,6 +413,10 @@ export interface Dictionary {
     empty: string;
     required: string;
     status: string;
+    /** Placeholder for a day-first date field. */
+    datePlaceholder: string;
+    invalidDate: string;
+    dateOutOfRange: string;
   };
   durationUnits: {
     minutes: (m: number) => string;

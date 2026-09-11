@@ -164,6 +164,9 @@ This document establishes the terminology used in the Vietnamese localization (`
 | Key | English UI text | Vietnamese draft | Alternatives | Where used | Status |
 |---|---|---|---|---|---|
 | `common.save` | Save | Lưu | Lưu lại | Forms, dialogs | DRAFT |
+| `common.datePlaceholder` | dd/mm/yyyy | ngày/tháng/năm | nn/tt/nnnn | `DateInput` (Finance filter, New order) | Placeholder of the day-first date field; the field never follows the browser's date order | DRAFT |
+| `common.invalidDate` | Not a valid date. Type day/month/year, e.g. 31/12/2026. | Ngày không hợp lệ. Nhập theo dạng ngày/tháng/năm, ví dụ 31/12/2026. | Sai định dạng ngày | `DateInput` | Shown as the field's validation message; the form will not submit | DRAFT |
+| `common.dateOutOfRange` | This date is outside the allowed range. | Ngày nằm ngoài khoảng cho phép. | Ngày không hợp lệ | `DateInput` | e.g. a required date before the order date, or From after To | DRAFT |
 | `common.cancel` | Cancel | Hủy | Bỏ qua | Dialogs, modals | DRAFT |
 | `common.close` | Close | Đóng | Thoát | Modals, drawers | DRAFT |
 | `common.search` | Search | Tìm kiếm | Tra cứu | Inputs | DRAFT |

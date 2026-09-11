@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, formatApiError, UnauthorizedError } from "../api";
+import { quantity } from "../format";
 import { useT } from "../i18n";
 import type { Dictionary } from "../i18n/types";
 import type { Order, OrderStatus } from "../types";
@@ -85,7 +86,7 @@ const ignoreSessionLoss = () => undefined;
 function lineSummary(order: Order, t: Dictionary): string {
   const first = order.lines[0];
   if (!first) return t.orders.noLines;
-  const summary = `${first.quantity} ${first.unit} · ${first.product?.name ?? first.description}`;
+  const summary = `${quantity(first.quantity)} ${first.unit} · ${first.product?.name ?? first.description}`;
   return order.lines.length > 1 ? `${summary} ${t.orders.moreLines(order.lines.length - 1)}` : summary;
 }
 

@@ -68,9 +68,9 @@ test("Finance date filter changes what Sales actually shows", async ({ page }) =
 
   // A window that excludes every seeded document must actually change the
   // rendered result, not just the input's value.
-  await page.getByLabel("From").fill("2030-01-01");
+  await page.getByLabel("From").fill("01/01/2030");
   await expect(page.getByText("No sales records for this period.")).toBeVisible();
-  await expect(page.getByLabel("From")).toHaveValue("2030-01-01");
+  await expect(page.getByLabel("From")).toHaveValue("01/01/2030");
   await expect(page).toHaveURL(/from=2030-01-01/);
 
   // Clearing the filter brings the real data back.
@@ -112,8 +112,12 @@ test("DateRangeFilter displays unambiguously in en-US and vi-VN locales", async 
     await page.getByRole("button", { name: "Finance" }).click();
     await expect(page.getByRole("heading", { name: "Finance" })).toBeVisible();
 
-    await page.getByLabel("From").fill("2026-06-01");
-    await page.getByLabel("To").fill("2026-06-30");
+    await page.getByLabel("From").fill("01/06/2026");
+    await page.getByLabel("To").fill("30/06/2026");
+
+    // The fields themselves read day-first in both browser locales, not only the trigger.
+    await expect(page.getByLabel("From")).toHaveValue("01/06/2026");
+    await expect(page.getByLabel("To")).toHaveValue("30/06/2026");
 
     // The unambiguous DD/MM/YYYY text is displayed in the calendar trigger:
     await expect(page.locator(".dual-calendar-trigger")).toContainText("01/06/2026 – 30/06/2026");
