@@ -149,6 +149,9 @@ describe("OverviewView", () => {
     expect(screen.getAllByText("2").length).toBeGreaterThan(0); // 2 active orders
     expect(await screen.findByText("Nothing needs attention.")).toBeInTheDocument();
     expect(await screen.findByText(/1.000.000/)).toBeInTheDocument(); // sales total, vi-VN grouped
+    // The payment-source note is explained in words, never shown as its raw code.
+    expect(await screen.findByText(/EasyBooks exposes no paid or outstanding amount/)).toBeInTheDocument();
+    expect(screen.queryByText(/NO_PAYMENT_SOURCE/)).not.toBeInTheDocument();
   });
 
   it("shows an API error distinctly, not a blank or a zero", async () => {

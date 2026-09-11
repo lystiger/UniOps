@@ -351,13 +351,13 @@ export function OverviewView({
             <Stat label={t.overview.stats.salesMinusPurchases} value={money(commercial.data?.sales_minus_purchases)} />
           </StatRow>
         )}
-        {!receivables.loading && !receivables.error && receivables.data && receivables.data.total_outstanding === null && (
-          <p className="section-note">
-            {receivables.data.outstanding_status?.startsWith("EasyBooks exposes no paid or outstanding amount")
-              ? t.accounting.outstandingExposesNote
-              : receivables.data.outstanding_status}.
-          </p>
-        )}
+        {!receivables.loading &&
+          !receivables.error &&
+          receivables.data &&
+          receivables.data.total_outstanding === null &&
+          receivables.data.outstanding_status === "NO_PAYMENT_SOURCE" && (
+            <p className="section-note">{t.accounting.outstandingExposesNote}.</p>
+          )}
       </Section>
 
       <Section title={t.overview.easybooksSync}>
