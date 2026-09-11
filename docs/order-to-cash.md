@@ -234,4 +234,8 @@ deposits are recorded, but never offset against the invoices.
 
 So `payment_status` and `due_status` stay `UNKNOWN`, and they now stay that way
 on verified evidence rather than on an absent endpoint. What would change it is
-the bookkeeping practice, not another capture.
+the bookkeeping practice, not another capture — specifically, using
+`Đối trừ chứng từ` to offset receipts against invoices. Until then the only
+per-customer figure EasyBooks offers is gross of about 18.8 billion dong of
+payments already banked. See
+[EasyBooks receivables reconciliation](easybooks-receivables-reconciliation.md).

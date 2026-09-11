@@ -113,6 +113,8 @@ The repository is a small monorepo:
 - `scripts/`: backup and restore;
 - `docs/data-architecture.md`: the layers, the connector boundary, and lineage;
 - `docs/order-to-cash.md`: order/invoice linking, receivables, and what EasyBooks does not expose;
+- `docs/easybooks-receivables-discovery.md`: the receivable and payment endpoints, and what they can prove;
+- `docs/easybooks-receivables-reconciliation.md`: why three EasyBooks receivable totals disagree, and which is authoritative;
 - `docs/operations.md`: accounts, PostgreSQL deployment, and backups;
 - `docs/easybooks-integration.md`: source-specific contract and live setup boundary.
 
@@ -358,7 +360,7 @@ make test-pg
 - Synchronous database operations target the present small-team load, not high concurrency.
 - **Sign-in has no rate limit or lockout.** Argon2id makes each attempt cost real time and an unknown username costs the same as a known one, but a determined attacker with network access can keep guessing. This is sized for three accounts on an internal network.
 - **There is no general audit trail.** The database records who exists and when they last signed in, not who created or advanced which order. Accounting links are the exception: each records who confirmed it, by which method, and on what evidence.
-- **No payment or receivable settlement data exists.** EasyBooks exposes no due date, paid amount, outstanding amount, or payment reference on any observed sales document, and no payments endpoint has been observed. Outstanding, overdue, and payment status are reported as unknown rather than approximated.
+- **No publishable receivable figure exists yet.** EasyBooks does expose customer debt, invoice-level open items, cash receipts and bank deposits, but the per-customer figure is gross of roughly 18.8 billion dong of payments already banked and never offset against invoices, and the ledger figure that is correct is only available company-wide. The three EasyBooks totals for customer debt differ by up to thirteen times for that reason. Outstanding, overdue, and payment status are reported as unknown rather than approximated. See `docs/easybooks-receivables-reconciliation.md`.
 - The static frontend bundle loads without a session, because the sign-in screen is part of it. It carries no data; every route it calls is guarded.
 - No production scheduling, inventory, delivery optimization, invoicing, receivable, or payment workflow is implemented yet.
 
