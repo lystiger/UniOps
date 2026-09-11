@@ -25,13 +25,14 @@ test.describe("i18n locale flow & translations", () => {
     await page.goto("/");
     await expect(page.locator("html")).toHaveAttribute("lang", "vi");
     await expect(page.getByRole("heading", { name: "UniOps" })).toBeVisible();
-    await expect(page.getByText("Đăng nhập để vào bàn điều phối đơn hàng & xưởng sản xuất.")).toBeVisible();
     await expect(page.getByLabel("Tên đăng nhập")).toBeVisible();
     await expect(page.getByLabel("Mật khẩu", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Đăng nhập" })).toBeVisible();
 
     const switcher = page.locator(".sign-in-language-switcher");
     await expect(switcher).toBeVisible();
+    await expect(switcher.getByText("VI")).toBeVisible();
+    await expect(switcher.getByText("ENG")).toBeVisible();
     await expect(switcher.getByRole("button", { name: "Tiếng Việt" })).toBeVisible();
     await expect(switcher.getByRole("button", { name: "English" })).toBeVisible();
   });

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { api } from "../api";
-import { isoDate, money, today } from "../format";
+import { isoDate, money } from "../format";
 import { useApiResource } from "../hooks";
 import { useT } from "../i18n";
 import type { Dictionary } from "../i18n/types";
@@ -148,7 +148,7 @@ export function OverviewView({
 
   return (
     <div className="overview-page">
-      <PageHeader title={t.overview.title} context={isoDate(today())} />
+      <PageHeader title={t.overview.title} />
 
       <Section>
         {orders.loading ? (

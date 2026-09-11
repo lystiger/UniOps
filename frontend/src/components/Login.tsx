@@ -39,10 +39,9 @@ export function Login({ onSignedIn }: { onSignedIn: (user: User) => void }) {
               Uni<span className="brand-green-accent">-Green</span> <span className="brand-ops-slash">/</span> <span className="brand-ops-label">OPS</span>
             </span>
           </div>
-          <LanguageSwitcher className="sign-in-language-switcher" />
+          <LanguageSwitcher className="sign-in-language-switcher" variant="short" />
         </div>
         <h1>UniOps</h1>
-        <p className="sign-in-lead">{t.auth.signInLead}</p>
         {error && (
           <div className="message error" role="alert">
             {error}

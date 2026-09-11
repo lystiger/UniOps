@@ -127,12 +127,25 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  background: var(--paper);
-  border-bottom: 1px solid var(--line);
+  /* The app frame is dark so it reads as chrome, apart from the light working page. */
+  --topbar-bg: #10231A;
+  --topbar-ink: #F4F7F5;
+  --topbar-ink-muted: rgba(244, 247, 245, 0.66);
+  --topbar-hover: rgba(255, 255, 255, 0.07);
+  --topbar-line: rgba(255, 255, 255, 0.14);
+  --topbar-accent: #4CC27A;
+  background: var(--topbar-bg);
+  color: var(--topbar-ink);
+  border-bottom: 1px solid #0A1711;
   position: sticky;
   top: 0;
   z-index: 30;
-  backdrop-filter: blur(8px);
+  transition: box-shadow var(--motion-fast) ease;
+}
+
+/* Lifts off the page only once content scrolls under it; nothing moves or resizes. */
+.topbar.is-scrolled {
+  box-shadow: 0 6px 18px -10px rgba(10, 23, 17, 0.55);
 }
 
 .topbar-brand-section {
@@ -200,6 +213,34 @@ a:focus-visible {
   color: var(--ink-muted);
 }
 
+.topbar .brand,
+.topbar .brand-logo-text {
+  color: var(--topbar-ink);
+}
+
+.topbar .brand-green-accent {
+  color: var(--topbar-accent);
+}
+
+.topbar .brand-slash {
+  color: var(--topbar-line);
+}
+
+.topbar .brand-ops-label {
+  color: var(--topbar-ink-muted);
+}
+
+.topbar .brand-mark {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--topbar-line);
+}
+
+.topbar .brand:focus-visible {
+  outline: 2px solid var(--topbar-accent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 /* Navigation items */
 .topbar-nav {
   display: flex;
@@ -213,7 +254,7 @@ a:focus-visible {
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--topbar-ink-muted);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -222,15 +263,19 @@ a:focus-visible {
 }
 
 .nav-item:hover {
-  background: var(--paper-sunk);
-  color: var(--ink);
+  background: var(--topbar-hover);
+  color: var(--topbar-ink);
+}
+
+.nav-item:focus-visible {
+  outline: 2px solid var(--topbar-accent);
+  outline-offset: 1px;
 }
 
 .nav-item.active {
-  background: var(--paper-sunk);
-  color: var(--ink);
+  background: var(--topbar-hover);
+  color: var(--topbar-ink);
   font-weight: 600;
-  border-color: var(--line);
 }
 
 .nav-item.active::after {
@@ -240,7 +285,7 @@ a:focus-visible {
   left: 14px;
   right: 14px;
   height: 2px;
-  background: var(--brand-green);
+  background: var(--topbar-accent);
   border-radius: 1px;
 }
 
@@ -284,22 +329,22 @@ a:focus-visible {
   height: 36px;
   padding: 0;
   background: transparent;
-  border: 1px solid var(--line);
+  border: 1px solid var(--topbar-line);
   border-radius: var(--radius-control);
-  color: var(--ink-muted);
+  color: var(--topbar-ink-muted);
   cursor: pointer;
   transition: background var(--motion-fast) ease, border-color var(--motion-fast) ease, color var(--motion-fast) ease;
 }
 
 .settings-trigger:hover,
 .settings-trigger.active {
-  background: var(--paper-sunk);
-  color: var(--ink);
-  border-color: var(--line-strong);
+  background: var(--topbar-hover);
+  color: var(--topbar-ink);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .settings-trigger:focus-visible {
-  outline: 2px solid var(--brand-green);
+  outline: 2px solid var(--topbar-accent);
   outline-offset: 1px;
 }
 
@@ -1416,13 +1461,6 @@ input[inputmode="decimal"] {
   color: var(--ink);
 }
 
-.sign-in-lead {
-  margin: -6px 0 6px;
-  color: var(--ink-muted);
-  font-size: 14px;
-  line-height: 1.45;
-}
-
 .sign-in-card label {
   display: flex;
   flex-direction: column;
@@ -1746,6 +1784,10 @@ input[inputmode="decimal"] {
 
 .stat-value[data-tone="overdue"] {
   color: var(--status-rejected-text);
+}
+
+.stat-value[data-tone="warning"] {
+  color: var(--status-pending-text);
 }
 
 .stat-label {
@@ -2254,42 +2296,53 @@ input[inputmode="decimal"] {
   border-bottom-color: var(--brand-green);
 }
 
-/* --- Status pill: label always readable without relying on color alone --- */
+/* --- Status indicator: dot plus label, readable without relying on color alone --- */
 
-.status-pill {
+.status-indicator {
   display: inline-flex;
   align-items: center;
-  padding: 2px 9px;
-  border-radius: 999px;
-  border: 1px solid;
+  gap: 7px;
   font-family: var(--font-compact);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
   white-space: nowrap;
+  color: var(--ink);
 }
 
-.status-pill.status-tone-neutral {
-  color: var(--status-draft-text);
-  background: var(--status-draft-bg);
-  border-color: var(--status-draft-border);
+.status-indicator[data-tone="neutral"] {
+  color: var(--ink-muted);
 }
 
-.status-pill.status-tone-pending {
+.status-indicator[data-tone="pending"] {
   color: var(--status-pending-text);
-  background: var(--status-pending-bg);
-  border-color: var(--status-pending-border);
 }
 
-.status-pill.status-tone-accepted {
-  color: var(--status-accepted-text);
-  background: var(--status-accepted-bg);
-  border-color: var(--status-accepted-border);
-}
-
-.status-pill.status-tone-rejected {
+.status-indicator[data-tone="rejected"] {
   color: var(--status-rejected-text);
-  background: var(--status-rejected-bg);
-  border-color: var(--status-rejected-border);
+}
+
+.status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-draft);
+}
+
+.status-dot[data-tone="success"] {
+  background: var(--brand-green);
+  box-shadow: 0 0 0 3px var(--brand-tint);
+}
+
+.status-dot[data-tone="pending"] {
+  background: var(--status-pending);
+  box-shadow: 0 0 0 3px var(--status-pending-bg);
+}
+
+.status-dot[data-tone="rejected"] {
+  background: var(--status-rejected);
+  box-shadow: 0 0 0 3px var(--status-rejected-bg);
 }
 
 /* --- Empty / loading states --- */
@@ -2329,6 +2382,98 @@ input[inputmode="decimal"] {
   font-family: var(--font-compact);
   font-size: 13px;
   color: var(--ink-muted);
+}
+
+/* --- Data: a health headline, one line of facts, then the latest run's counts --- */
+
+.sync-health {
+  margin-bottom: 16px;
+}
+
+.sync-health-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.sync-health-title .status-dot {
+  width: 10px;
+  height: 10px;
+}
+
+.sync-health-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 28px;
+  margin: 6px 0 0 20px;
+  font-family: var(--font-compact);
+  font-size: 13px;
+}
+
+.sync-health-facts div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.sync-health-facts dt {
+  color: var(--ink-muted);
+}
+
+.sync-health-facts dt::after {
+  content: ":";
+}
+
+.sync-health-facts dd {
+  margin: 0;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.sync-health-ago {
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.sync-health-error {
+  max-width: 72ch;
+  margin: 8px 0 0 20px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--status-rejected-text);
+  overflow-wrap: anywhere;
+}
+
+.sync-run-error {
+  max-width: 36ch;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--status-rejected-text);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.num-zero {
+  color: var(--ink-faint);
+}
+
+.num-alert {
+  font-weight: 600;
+  color: var(--status-rejected-text);
+}
+
+.num-warn {
+  font-weight: 600;
+  color: var(--status-pending-text);
 }
 
 .overview-footer-actions {
@@ -2493,9 +2638,16 @@ input[inputmode="decimal"] {
 
 .sign-in-language-switcher {
   background: var(--paper-sunk);
-  padding: 3px 4px;
+  padding: 2px 4px;
   border-radius: var(--radius-control);
   border: 1px solid var(--line);
+}
+
+.sign-in-language-switcher .lang-btn {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
 }
 
 .settings-language-section {

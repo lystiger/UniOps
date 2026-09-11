@@ -69,7 +69,7 @@ export function Stat({
 }: {
   label: string;
   value: ReactNode;
-  tone?: "producing" | "ready" | "overdue";
+  tone?: "producing" | "ready" | "overdue" | "warning";
 }) {
   return (
     <div className="stat">
@@ -163,12 +163,17 @@ export { DateRangeFilter, type DateRangeFilterProps } from "./DateRangeFilter";
 
 // --- Status -----------------------------------------------------------------
 
-export type StatusTone = "neutral" | "pending" | "accepted" | "rejected";
+export type StatusTone = "neutral" | "pending" | "success" | "rejected";
 
-/** A short status word, colored but never color-only: the label always reads
- * on its own, which is what a screen reader or a grayscale print gets. */
+/** A short status word led by a colored dot, never color-only: the label always
+ * reads on its own, which is what a screen reader or a grayscale print gets. */
 export function Status({ label, tone }: { label: string; tone: StatusTone }) {
-  return <span className={`status-pill status-tone-${tone}`}>{label}</span>;
+  return (
+    <span className="status-indicator" data-tone={tone}>
+      <span className="status-dot" data-tone={tone} aria-hidden="true" />
+      {label}
+    </span>
+  );
 }
 
 // --- EmptyState ---------------------------------------------------------

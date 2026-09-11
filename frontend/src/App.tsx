@@ -57,6 +57,15 @@ export function AppInner() {
     setView("board");
   }, []);
 
+  // Only a shadow reacts to scroll; the bar keeps its height so tables never jump.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const update = () => setScrolled(window.scrollY > 0);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, []);
+
   if (checking) {
     return firstOpen ? <LoadingScreen /> : <SessionCheckPending />;
   }
@@ -68,7 +77,7 @@ export function AppInner() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
+      <header className={scrolled ? "topbar is-scrolled" : "topbar"}>
         <div className="topbar-brand-section">
           <button className="brand" type="button" onClick={() => setView("board")}>
             <span className="brand-mark" aria-hidden="true">

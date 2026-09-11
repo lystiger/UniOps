@@ -5,12 +5,20 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models import LinkMethod, OrderStatus, UserRole
+from app.security import as_utc
 from app.services.exceptions_view import ExceptionCategory
 from app.services.order_to_cash import AccountingStatus, DueStatus, PaymentStatus
 
 
 class ApiModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("*", mode="after")
+    @classmethod
+    def _timestamps_carry_utc(cls, value: Any) -> Any:
+        # Every timestamp is written as UTC, but SQLite hands it back naive. Sent
+        # without an offset, a browser reads it as local time and shows it hours off.
+        return as_utc(value) if isinstance(value, datetime) else value
 
 
 class CustomerCreate(ApiModel):

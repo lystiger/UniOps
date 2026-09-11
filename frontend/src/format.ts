@@ -38,6 +38,23 @@ export function timestamp(value: string | null | undefined): string {
   return dateTimeFormatter.format(new Date(value));
 }
 
+/** How long ago an ISO timestamp was, e.g. "3 giờ trước" or "3 hours ago". */
+export function relativeTime(
+  value: string | null | undefined,
+  locale: "vi" | "en" = "vi",
+  now: Date = new Date(),
+): string {
+  if (!value) return "—";
+  const seconds = Math.round((new Date(value).getTime() - now.getTime()) / 1000);
+  if (!Number.isFinite(seconds)) return "—";
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const elapsed = Math.abs(seconds);
+  if (elapsed < 60) return formatter.format(0, "second");
+  if (elapsed < 3600) return formatter.format(Math.round(seconds / 60), "minute");
+  if (elapsed < 86400) return formatter.format(Math.round(seconds / 3600), "hour");
+  return formatter.format(Math.round(seconds / 86400), "day");
+}
+
 /** Wall-clock duration between two ISO timestamps, e.g. "2m 14s" or "2 phút 14 giây". Empty if
  * either end is missing — never guessed from a run still in progress. */
 export function duration(
@@ -63,7 +80,7 @@ import type { SyncRun } from "./types";
 import type { StatusTone } from "./components/primitives";
 
 export const syncStatusTone: Record<SyncRun["status"], StatusTone> = {
-  SUCCEEDED: "accepted",
+  SUCCEEDED: "success",
   PARTIAL: "pending",
   FAILED: "rejected",
   RUNNING: "neutral",

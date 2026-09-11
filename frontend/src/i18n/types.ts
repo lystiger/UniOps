@@ -266,20 +266,38 @@ export interface Dictionary {
   data: {
     title: string;
     context: string;
+    /** Headline for the most recent run, keyed by its status. */
+    health: Record<SyncRunStatus, string>;
     facts: {
       lastSuccess: string;
       lastAttempt: string;
-      status: string;
-      rowsProcessed: string;
+      neverSucceeded: string;
+    };
+    counts: {
+      seen: string;
+      created: string;
+      updated: string;
+      unchanged: string;
+      failed: string;
+      warnings: string;
+    };
+    modes: {
+      fixture: string;
+      live: string;
+      liveHeaders: string;
     };
     recentRuns: string;
     columns: {
-      time: string;
+      started: string;
       mode: string;
+      period: string;
       status: string;
-      rows: string;
+      documents: string;
+      created: string;
+      updated: string;
+      failed: string;
       warnings: string;
-      durationDetails: string;
+      duration: string;
     };
     empty: string;
     noRunsYet: string;
@@ -354,7 +372,6 @@ export interface Dictionary {
     signingIn: string;
     username: string;
     password: string;
-    signInLead: string;
     showPassword: string;
     hidePassword: string;
     settingsTitle: string;

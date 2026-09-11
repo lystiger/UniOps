@@ -368,12 +368,12 @@ describe("Vietnamese view English leakage checks", () => {
     );
 
     expect(screen.getByRole("heading", { name: "UniOps" })).toBeInTheDocument();
-    expect(screen.getByText("Đăng nhập để vào bàn điều phối đơn hàng & xưởng sản xuất.")).toBeInTheDocument();
     expect(screen.getByLabelText("Tên đăng nhập")).toBeInTheDocument();
     expect(screen.getByLabelText("Mật khẩu")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Đăng nhập" })).toBeInTheDocument();
+    expect(screen.getByText("VI")).toBeInTheDocument();
+    expect(screen.getByText("ENG")).toBeInTheDocument();
 
-    expect(screen.queryByText("Sign in to reach the order desk & factory operations.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
   });
 
@@ -622,6 +622,19 @@ describe("Vietnamese view English leakage checks", () => {
         <LanguageSwitcher />
       </LocaleProvider>,
     );
+    expect(screen.getByRole("button", { name: "Tiếng Việt" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
+  });
+
+  it("LanguageSwitcher renders short variant with VI and ENG", () => {
+    render(
+      <LocaleProvider>
+        <LanguageSwitcher variant="short" />
+      </LocaleProvider>,
+    );
+    expect(screen.getByText("VI")).toBeInTheDocument();
+    expect(screen.getByText("ENG")).toBeInTheDocument();
+    expect(screen.getByText("/")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tiếng Việt" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
   });

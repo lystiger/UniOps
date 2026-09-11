@@ -84,9 +84,16 @@ export function useT(): Dictionary {
   return ctx.t;
 }
 
-export function LanguageSwitcher({ className }: { className?: string }) {
+export function LanguageSwitcher({
+  className,
+  variant = "full",
+}: {
+  className?: string;
+  variant?: "full" | "short";
+}) {
   const { locale, setLocale } = useLocale();
   const t = useT();
+  const isShort = variant === "short";
 
   return (
     <div className={`language-switcher ${className ?? ""}`} role="group" aria-label={t.auth.language}>
@@ -95,17 +102,21 @@ export function LanguageSwitcher({ className }: { className?: string }) {
         className={`lang-btn ${locale === "vi" ? "active" : ""}`}
         onClick={() => setLocale("vi")}
         aria-pressed={locale === "vi"}
+        aria-label="Tiếng Việt"
       >
-        Tiếng Việt
+        {isShort ? "VI" : "Tiếng Việt"}
       </button>
-      <span className="lang-separator" aria-hidden="true">|</span>
+      <span className="lang-separator" aria-hidden="true">
+        {isShort ? "/" : "|"}
+      </span>
       <button
         type="button"
         className={`lang-btn ${locale === "en" ? "active" : ""}`}
         onClick={() => setLocale("en")}
         aria-pressed={locale === "en"}
+        aria-label="English"
       >
-        English
+        {isShort ? "ENG" : "English"}
       </button>
     </div>
   );
