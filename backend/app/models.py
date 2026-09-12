@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Enum,
@@ -19,8 +20,10 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.schema import DDL
 
 from app.database import Base
 
@@ -146,45 +149,66 @@ class ProductStatus(StrEnum):
 
 
 class ProductSkuSequence(Base):
+    """The single counter SKUs are allocated from.
+
+    One row (id = 1). A number is taken by incrementing it inside the creating
+    transaction, so a number is never handed out twice, and a number whose
+    transaction commits is never handed out again even if the product is later
+    removed.
+    """
+
     __tablename__ = "product_sku_sequence"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    last_number: Mapped[int] = mapped_column(Integer, default=0)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    last_number: Mapped[int] = mapped_column(Integer)
 
 
-def _new_sku_fallback() -> str:
-    return f"UG{uuid.uuid4().hex[:6].upper()}"
+# A schema built straight from the models (the test suite) gets the counter row
+# the migration would have written, so allocation never has to invent one.
+event.listen(
+    ProductSkuSequence.__table__,
+    "after_create",
+    DDL("INSERT INTO product_sku_sequence (id, last_number) VALUES (1, 0)"),
+)
 
 
 class Product(Base):
+    """The canonical product. UniOps is the only system that owns its identity.
+
+    `id` and `sku` never change once written. `code` and
+    `easybooks_material_goods_id` are the EasyBooks mapping, written by the
+    EasyBooks sync; they are references to the accounting system, not identity.
+    """
+
     __tablename__ = "products"
     __table_args__ = (
         UniqueConstraint("sku", name="uq_product_sku"),
         UniqueConstraint("code", name="uq_product_code"),
         UniqueConstraint("easybooks_material_goods_id", name="uq_product_eb_material_id"),
-        Index("ix_products_sku", "sku"),
+        CheckConstraint(
+            "length(sku) = 8 AND substr(sku, 1, 2) = 'UG'", name="ck_products_sku_format"
+        ),
+        CheckConstraint("status IN ('active', 'discontinued')", name="ck_products_status"),
         Index("ix_products_name", "name"),
         Index("ix_products_category", "category"),
         Index("ix_products_status", "status"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    sku: Mapped[str] = mapped_column(String(32), default=_new_sku_fallback)
+    # No default: a SKU only ever comes from app.services.catalog.allocate_sku.
+    sku: Mapped[str] = mapped_column(String(8))
     name: Mapped[str] = mapped_column(String(255))
     unit: Mapped[str] = mapped_column(String(50))
     category: Mapped[str] = mapped_column(String(100), default="general")
     status: Mapped[str] = mapped_column(String(20), default=ProductStatus.ACTIVE.value)
     specifications: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    code: Mapped[str | None] = mapped_column(String(100))  # EasyBooks material goods code
+    # EasyBooks material goods code.
+    code: Mapped[str | None] = mapped_column(String(100))
     easybooks_material_goods_id: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
-
-    @property
-    def easybooks_code(self) -> str | None:
-        return self.code
 
 
 class Order(Base):

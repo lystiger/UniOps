@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./uniops.db"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     log_level: str = "INFO"
-    api_key: str | None = None
+    # Shared secret another internal system presents in the X-UniOps-Catalog-Key
+    # header to read canonical products and request new ones. Unset, the
+    # catalogue routes accept signed-in users only.
+    catalog_service_key: SecretStr | None = None
 
     # Session authentication. The cookie is HttpOnly and SameSite=Lax, so a
     # cross-site form cannot carry it into a state-changing request.
@@ -52,6 +55,16 @@ class Settings(BaseSettings):
     # Optional start date (ISO YYYY-MM-DD). When set, Overview 'Needs attention'
     # unlinked invoices only include documents dated on or after this date.
     order_tracking_since: date | None = None
+
+    @field_validator("catalog_service_key", mode="before")
+    @classmethod
+    def _strong_catalog_key(cls, value: object) -> object:
+        raw = value.get_secret_value() if isinstance(value, SecretStr) else value
+        if raw in (None, ""):
+            return None
+        if not isinstance(raw, str) or len(raw) < 32:
+            raise ValueError("UNIOPS_CATALOG_SERVICE_KEY must be at least 32 characters")
+        return raw
 
     @field_validator("session_lifetime_hours")
     @classmethod

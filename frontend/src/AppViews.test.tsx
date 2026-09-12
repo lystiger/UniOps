@@ -140,7 +140,7 @@ describe("Navigation and page identity", () => {
     expect(await screen.findByText("EasyBooks synchronization")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Products" }));
-    expect(await screen.findByRole("heading", { name: "Product Master" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Products" })).toBeInTheDocument();
     expect(await screen.findByText("UG000001")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "+ New order" }));

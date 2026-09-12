@@ -13,6 +13,7 @@ import type {
   PurchaseSummary,
   Receivables,
   Product,
+  ProductStatus,
   SalesSummary,
   SyncRun,
   User,
@@ -166,35 +167,42 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ ...payload, tax_code: payload.tax_code?.trim() || null }),
     }),
-  products: (params?: { search?: string; category?: string; status?: string }) => {
+  products: (params?: { search?: string; status?: ProductStatus }) => {
     const query = new URLSearchParams();
     if (params?.search) query.set("search", params.search);
-    if (params?.category) query.set("category", params.category);
     if (params?.status) query.set("status", params.status);
     const qs = query.toString();
     return request<Product[]>(`/api/products${qs ? `?${qs}` : ""}`);
   },
-  product: (id: string) => request<Product>(`/api/products/${encodeURIComponent(id)}`),
+  // No SKU is sent: UniOps assigns it, and the API refuses one.
   createProduct: (payload: {
-    sku?: string;
-    code?: string;
-    easybooks_code?: string;
     name: string;
     unit: string;
+    code?: string;
     category?: string;
-    status?: string;
     specifications?: Record<string, unknown>;
   }) =>
     request<Product>("/api/products", {
       method: "POST",
       body: JSON.stringify({
         ...payload,
-        sku: payload.sku?.trim() || undefined,
-        code: payload.code?.trim() || payload.easybooks_code?.trim() || null,
-        category: payload.category?.trim() || "general",
-        status: payload.status || "active",
-        specifications: payload.specifications || {},
+        code: payload.code?.trim() || null,
+        ...(payload.category?.trim() ? { category: payload.category.trim() } : {}),
       }),
+    }),
+  updateProduct: (
+    id: string,
+    payload: {
+      name?: string;
+      unit?: string;
+      category?: string;
+      status?: ProductStatus;
+      specifications?: Record<string, unknown>;
+    },
+  ) =>
+    request<Product>(`/api/products/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
     }),
   orders: (search = "") =>
     request<OrderList>(`/api/orders?search=${encodeURIComponent(search)}&limit=500`),

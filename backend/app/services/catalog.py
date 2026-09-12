@@ -1,5 +1,4 @@
 import re
-import threading
 from typing import Any
 
 from sqlalchemy import or_, select, update
@@ -7,10 +6,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Customer, Product, ProductSkuSequence
-from app.schemas import CustomerCreate, ProductCreate
+from app.schemas import CustomerCreate, ProductCreate, ProductUpdate
 
+# The SKU is a non-semantic sequence number: it says nothing about ply, size or
+# packaging, so no change to those can ever make it wrong.
+SKU_PREFIX = "UG"
 SKU_PATTERN = re.compile(r"^UG\d{6}$")
-_sku_lock = threading.Lock()
+SKU_MAX_NUMBER = 999_999
 
 
 class CatalogConflict(ValueError):
@@ -66,89 +68,71 @@ def list_customers(session: Session, search: str | None = None) -> list[Customer
     return list(session.scalars(statement))
 
 
-def _get_highest_sku_number(session: Session) -> int:
-    max_num = 0
-    skus = session.scalars(select(Product.sku)).all()
-    for s in skus:
-        if s and s.startswith("UG") and s[2:].isdigit():
-            max_num = max(max_num, int(s[2:]))
-    return max_num
+def allocate_sku(session: Session) -> str:
+    """Take the next SKU from the sequence inside the caller's transaction.
 
-
-def generate_next_sku(session: Session) -> str:
-    """Generate the next sequential non-semantic SKU (UG000001 form).
-
-    Safe under concurrent creation using sequence row lock and atomic increment.
+    The increment is a single UPDATE, so on PostgreSQL it holds the sequence
+    row lock until the caller commits or rolls back: two concurrent creations
+    queue behind each other and cannot read the same number. A rolled-back
+    creation gives its number back; a committed one is never handed out again.
     """
-    with _sku_lock:
-        stmt = (
-            update(ProductSkuSequence)
-            .where(ProductSkuSequence.id == 1)
-            .values(last_number=ProductSkuSequence.last_number + 1)
-            .returning(ProductSkuSequence.last_number)
+    number = session.execute(
+        update(ProductSkuSequence)
+        .where(ProductSkuSequence.id == 1)
+        .values(last_number=ProductSkuSequence.last_number + 1)
+        .returning(ProductSkuSequence.last_number)
+    ).scalar_one_or_none()
+    if number is None:
+        raise RuntimeError(
+            "product_sku_sequence has no row; run the database migrations before creating products"
         )
-        val = session.execute(stmt).scalar_one_or_none()
-        if val is None:
-            max_num = _get_highest_sku_number(session)
-            seq = ProductSkuSequence(id=1, last_number=max_num + 1)
-            session.add(seq)
-            session.flush()
-            val = seq.last_number
-        else:
-            session.flush()
-        return f"UG{val:06d}"
+    if number > SKU_MAX_NUMBER:
+        raise CatalogConflict(
+            "the SKU sequence is exhausted", code="SKU_SEQUENCE_EXHAUSTED"
+        )
+    return f"{SKU_PREFIX}{number:06d}"
+
+
+def _clean(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return value.strip() or None
 
 
 def create_product(session: Session, data: ProductCreate) -> Product:
-    sku = data.sku.strip() if data.sku else None
-    if sku:
-        if not SKU_PATTERN.match(sku):
-            raise CatalogConflict(
-                f"SKU '{sku}' must match the UG000001 non-semantic format",
-                code="INVALID_SKU_FORMAT",
-            )
-        # Advance sequence if explicit SKU number is greater than current last_number
-        sku_num = int(sku[2:])
-        seq = session.scalar(
-            select(ProductSkuSequence).where(ProductSkuSequence.id == 1).with_for_update()
-        )
-        if seq is None:
-            highest = _get_highest_sku_number(session)
-            seq = ProductSkuSequence(id=1, last_number=max(sku_num, highest))
-            session.add(seq)
-        elif sku_num > seq.last_number:
-            seq.last_number = sku_num
-        session.flush()
-    else:
-        sku = generate_next_sku(session)
-
-    code = data.code or data.easybooks_code
     product = Product(
-        sku=sku,
+        sku=allocate_sku(session),
         name=data.name.strip(),
         unit=data.unit.strip(),
-        category=data.category.strip() if data.category else "general",
-        status=data.status if data.status else "active",
-        specifications=data.specifications or {},
-        code=code.strip() if code else None,
-        easybooks_material_goods_id=data.easybooks_material_goods_id,
+        category=data.category.strip(),
+        status=data.status.value,
+        specifications=data.specifications,
+        code=_clean(data.code),
+        easybooks_material_goods_id=_clean(data.easybooks_material_goods_id),
     )
     session.add(product)
     try:
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        orig_msg = str(getattr(exc, "orig", exc)).lower()
-        if "products.sku" in orig_msg or "uq_product_sku" in orig_msg or "key (sku)" in orig_msg:
-            raise CatalogConflict(
-                f"product SKU '{sku}' already exists",
-                code="PRODUCT_SKU_EXISTS",
-            ) from exc
         raise CatalogConflict(
             "product code or EasyBooks material ID already exists",
             code="PRODUCT_CODE_EXISTS",
         ) from exc
-    session.refresh(product)
+    return product
+
+
+def update_product(session: Session, product_id: str, data: ProductUpdate) -> Product:
+    product = get_product(session, product_id)
+    for field in ("name", "unit", "category"):
+        value = getattr(data, field)
+        if value is not None:
+            setattr(product, field, value.strip())
+    if data.status is not None:
+        product.status = data.status.value
+    if data.specifications is not None:
+        product.specifications = data.specifications
+    session.commit()
     return product
 
 
@@ -156,13 +140,6 @@ def get_product(session: Session, product_id: str) -> Product:
     product = session.get(Product, product_id)
     if product is None:
         raise CatalogNotFound(f"product '{product_id}' not found", code="PRODUCT_NOT_FOUND")
-    return product
-
-
-def get_product_by_sku(session: Session, sku: str) -> Product:
-    product = session.scalar(select(Product).where(Product.sku == sku))
-    if product is None:
-        raise CatalogNotFound(f"product with SKU '{sku}' not found", code="PRODUCT_NOT_FOUND")
     return product
 
 

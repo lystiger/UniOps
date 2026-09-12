@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 from app.models import Customer, Product, PurchaseDocument, PurchaseLine, SalesDocument, SalesLine
+from app.services.catalog import allocate_sku
 from app.services.export import build_workbook, export_workbook
 from openpyxl import load_workbook
 
@@ -86,7 +87,9 @@ def populated(session):
     _sales(session, "s-august", date(2026, 8, 1))
     _purchase(session, "p-june", date(2026, 6, 15))
     session.add(Customer(name="Synthetic Customer", easybooks_accounting_object_code="KH-SYNTH-01"))
-    session.add(Product(code="PAPER-SYNTH-01", name="Synthetic paper", unit="kg"))
+    session.add(
+        Product(sku=allocate_sku(session), code="PAPER-SYNTH-01", name="Synthetic paper", unit="kg")
+    )
     session.commit()
     return session
 
