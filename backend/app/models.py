@@ -140,23 +140,51 @@ class Customer(Base):
     orders: Mapped[list[Order]] = relationship(back_populates="customer")
 
 
+class ProductStatus(StrEnum):
+    ACTIVE = "active"
+    DISCONTINUED = "discontinued"
+
+
+class ProductSkuSequence(Base):
+    __tablename__ = "product_sku_sequence"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    last_number: Mapped[int] = mapped_column(Integer, default=0)
+
+
+def _new_sku_fallback() -> str:
+    return f"UG{uuid.uuid4().hex[:6].upper()}"
+
+
 class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
+        UniqueConstraint("sku", name="uq_product_sku"),
         UniqueConstraint("code", name="uq_product_code"),
         UniqueConstraint("easybooks_material_goods_id", name="uq_product_eb_material_id"),
+        Index("ix_products_sku", "sku"),
         Index("ix_products_name", "name"),
+        Index("ix_products_category", "category"),
+        Index("ix_products_status", "status"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
-    code: Mapped[str | None] = mapped_column(String(100))
+    sku: Mapped[str] = mapped_column(String(32), default=_new_sku_fallback)
     name: Mapped[str] = mapped_column(String(255))
     unit: Mapped[str] = mapped_column(String(50))
+    category: Mapped[str] = mapped_column(String(100), default="general")
+    status: Mapped[str] = mapped_column(String(20), default=ProductStatus.ACTIVE.value)
+    specifications: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    code: Mapped[str | None] = mapped_column(String(100))  # EasyBooks material goods code
     easybooks_material_goods_id: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+
+    @property
+    def easybooks_code(self) -> str | None:
+        return self.code
 
 
 class Order(Base):

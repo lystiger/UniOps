@@ -38,6 +38,8 @@ export type ErrorDict = {
   ORDER_HAS_LINKED_INVOICES: string;
   CUSTOMER_CODE_EXISTS: string;
   PRODUCT_CODE_EXISTS: string;
+  PRODUCT_SKU_EXISTS: string;
+  INVALID_SKU_FORMAT: string;
   INVOICE_ALREADY_LINKED: string;
   CANNOT_LINK_CANCELLED_ORDER: string;
   REQUIRED_DATE_BEFORE_ORDER_DATE: string;
@@ -62,6 +64,7 @@ export interface Dictionary {
   nav: {
     overview: string;
     orders: string;
+    products: string;
     finance: string;
     data: string;
     newOrder: string;
@@ -402,6 +405,37 @@ export interface Dictionary {
     noSyncRunYet: string;
     lastSyncAttempt: (time: string) => string;
     lastSync: (time: string) => string;
+  };
+  productsView: {
+    title: string;
+    context: string;
+    searchPlaceholder: string;
+    allCategories: string;
+    allStatuses: string;
+    active: string;
+    discontinued: string;
+    newProduct: string;
+    createTitle: string;
+    createSuccess: string;
+    columns: {
+      sku: string;
+      name: string;
+      category: string;
+      unit: string;
+      status: string;
+      easybooksCode: string;
+      specifications: string;
+    };
+    fields: {
+      sku: string;
+      skuHint: string;
+      name: string;
+      unit: string;
+      category: string;
+      easybooksCode: string;
+      specifications: string;
+    };
+    empty: string;
   };
   common: {
     save: string;

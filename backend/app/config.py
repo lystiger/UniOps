@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./uniops.db"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
     log_level: str = "INFO"
+    api_key: str | None = None
 
     # Session authentication. The cookie is HttpOnly and SameSite=Lax, so a
     # cross-site form cannot carry it into a state-changing request.

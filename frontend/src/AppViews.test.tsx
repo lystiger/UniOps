@@ -75,7 +75,21 @@ function mockApi() {
       return new Response(JSON.stringify([{ id: "cust-1", name: "UniPackaging Corp" }]), { status: 200 });
     }
     if (url.includes("/api/products")) {
-      return new Response(JSON.stringify([{ id: "prod-1", code: "P-01", name: "Parent Roll", unit: "kg" }]), { status: 200 });
+      return new Response(
+        JSON.stringify([
+          {
+            id: "prod-1",
+            sku: "UG000001",
+            code: "P-01",
+            name: "Parent Roll",
+            unit: "kg",
+            category: "jumbo",
+            status: "active",
+            specifications: {},
+          },
+        ]),
+        { status: 200 }
+      );
     }
     if (url.includes("/api/operations/exceptions")) {
       return new Response(JSON.stringify(exceptionReport), { status: 200 });
@@ -124,6 +138,10 @@ describe("Navigation and page identity", () => {
     fireEvent.click(screen.getByRole("button", { name: "Data" }));
     expect(await screen.findByRole("heading", { name: "Data" })).toBeInTheDocument();
     expect(await screen.findByText("EasyBooks synchronization")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Products" }));
+    expect(await screen.findByRole("heading", { name: "Product Master" })).toBeInTheDocument();
+    expect(await screen.findByText("UG000001")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "+ New order" }));
     expect(await screen.findByRole("heading", { name: "New order" })).toBeInTheDocument();

@@ -8,11 +8,12 @@ import { Login } from "./components/Login";
 import { NewOrder } from "./components/NewOrder";
 import { OrderBoard } from "./components/OrderBoard";
 import { OverviewView } from "./components/OverviewView";
+import { ProductsView } from "./components/ProductsView";
 import { LocaleProvider, useT } from "./i18n";
 import { SPLASH_MIN_MS, hasSeenSplash, markSplashSeen } from "./splash";
 import { canWrite, type User } from "./types";
 
-type View = "board" | "new" | "overview" | "finance" | "data";
+type View = "board" | "new" | "overview" | "finance" | "data" | "products";
 
 export function AppInner() {
   const [user, setUser] = useState<User | null>(null);
@@ -113,6 +114,13 @@ export function AppInner() {
             {t.nav.orders}
           </button>
           <button
+            className={view === "products" ? "nav-item active" : "nav-item"}
+            type="button"
+            onClick={() => setView("products")}
+          >
+            {t.nav.products}
+          </button>
+          <button
             className={view === "finance" ? "nav-item active" : "nav-item"}
             type="button"
             onClick={() => setView("finance")}
@@ -167,6 +175,9 @@ export function AppInner() {
             }}
             onSessionLost={handleSessionLost}
           />
+        )}
+        {view === "products" && (
+          <ProductsView canWrite={writer} onSessionLost={handleSessionLost} />
         )}
         {view === "finance" && <FinanceView onSessionLost={handleSessionLost} />}
         {view === "data" && <DataView onSessionLost={handleSessionLost} />}

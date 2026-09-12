@@ -166,11 +166,35 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ ...payload, tax_code: payload.tax_code?.trim() || null }),
     }),
-  products: () => request<Product[]>("/api/products"),
-  createProduct: (payload: { code?: string; name: string; unit: string }) =>
+  products: (params?: { search?: string; category?: string; status?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set("search", params.search);
+    if (params?.category) query.set("category", params.category);
+    if (params?.status) query.set("status", params.status);
+    const qs = query.toString();
+    return request<Product[]>(`/api/products${qs ? `?${qs}` : ""}`);
+  },
+  product: (id: string) => request<Product>(`/api/products/${encodeURIComponent(id)}`),
+  createProduct: (payload: {
+    sku?: string;
+    code?: string;
+    easybooks_code?: string;
+    name: string;
+    unit: string;
+    category?: string;
+    status?: string;
+    specifications?: Record<string, unknown>;
+  }) =>
     request<Product>("/api/products", {
       method: "POST",
-      body: JSON.stringify({ ...payload, code: payload.code?.trim() || null }),
+      body: JSON.stringify({
+        ...payload,
+        sku: payload.sku?.trim() || undefined,
+        code: payload.code?.trim() || payload.easybooks_code?.trim() || null,
+        category: payload.category?.trim() || "general",
+        status: payload.status || "active",
+        specifications: payload.specifications || {},
+      }),
     }),
   orders: (search = "") =>
     request<OrderList>(`/api/orders?search=${encodeURIComponent(search)}&limit=500`),

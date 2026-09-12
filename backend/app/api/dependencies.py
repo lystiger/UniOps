@@ -20,6 +20,15 @@ WRITE_ROLES = (UserRole.ADMIN, UserRole.OFFICE)
 
 async def current_user(request: Request, session: Session = Depends(get_db)) -> User:
     settings = get_settings()
+    if settings.api_key:
+        header_key = request.headers.get("x-uniops-key")
+        if not header_key:
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.lower().startswith("bearer "):
+                header_key = auth_header[7:].strip()
+        if header_key and header_key == settings.api_key:
+            return User(id="service:internal", username="service:internal", role=UserRole.ADMIN)
+
     token = request.cookies.get(settings.session_cookie_name, "")
     user = auth.resolve_session(session, token)
     if user is None:

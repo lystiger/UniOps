@@ -37,10 +37,17 @@ export interface Customer {
 
 export interface Product {
   id: string;
-  code: string | null;
+  sku?: string;
   name: string;
   unit: string;
+  category?: string;
+  status?: string;
+  specifications?: Record<string, unknown>;
+  code: string | null;
+  easybooks_code?: string | null;
   easybooks_material_goods_id: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface OrderLine {

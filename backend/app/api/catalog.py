@@ -45,9 +45,24 @@ async def create_customer(data: CustomerCreate, session: Session = Depends(get_d
 @router.get("/products", response_model=list[ProductRead], dependencies=[read_access])
 async def list_products(
     search: str | None = Query(default=None, max_length=100),
+    category: str | None = Query(default=None, max_length=100),
+    status: str | None = Query(default=None, max_length=20),
     session: Session = Depends(get_db),
 ):
-    return catalog.list_products(session, search)
+    return catalog.list_products(session, search=search, category=category, status=status)
+
+
+@router.get("/products/{product_id}", response_model=ProductRead, dependencies=[read_access])
+async def get_product(product_id: str, session: Session = Depends(get_db)):
+    try:
+        return catalog.get_product(session, product_id)
+    except catalog.CatalogNotFound as exc:
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+            code=getattr(exc, "code", "PRODUCT_NOT_FOUND"),
+            params=getattr(exc, "params", {}),
+        ) from exc
 
 
 @router.post(

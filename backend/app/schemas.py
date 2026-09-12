@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models import LinkMethod, OrderStatus, UserRole
 from app.security import as_utc
@@ -35,16 +35,44 @@ class CustomerRead(CustomerCreate):
 
 
 class ProductCreate(ApiModel):
-    code: str | None = Field(default=None, max_length=100)
+    sku: str | None = Field(default=None, max_length=32)
     name: str = Field(min_length=1, max_length=255)
     unit: str = Field(min_length=1, max_length=50)
+    category: str = Field(default="general", max_length=100)
+    status: str = Field(default="active", max_length=20)
+    specifications: dict[str, Any] = Field(default_factory=dict)
+    code: str | None = Field(default=None, max_length=100)
+    easybooks_code: str | None = Field(default=None, max_length=100)
     easybooks_material_goods_id: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reconcile_codes(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if data.get("easybooks_code") and not data.get("code"):
+                data["code"] = data["easybooks_code"]
+            elif data.get("code") and not data.get("easybooks_code"):
+                data["easybooks_code"] = data["code"]
+        return data
 
 
 class ProductRead(ProductCreate):
     id: str
+    sku: str
+    category: str = "general"
+    status: str = "active"
+    specifications: dict[str, Any] = Field(default_factory=dict)
+    easybooks_code: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_easybooks_code(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if data.get("code") and not data.get("easybooks_code"):
+                data["easybooks_code"] = data["code"]
+        return data
 
 
 class OrderLineInput(ApiModel):
