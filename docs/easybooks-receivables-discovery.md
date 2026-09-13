@@ -209,9 +209,9 @@ derived, not because the source lacks the capability, but because the data has
 never been entered. A settlement model built now would report every invoice as
 unpaid and would be indistinguishable from having no model at all.
 
-## An unresolved contradiction — do not model around this yet
+## The contradiction, since resolved
 
-Two EasyBooks-native receivable totals disagree by a factor of 6.7:
+Three EasyBooks-native receivable totals disagreed by up to thirteen times:
 
 ```text
 getSAReceiptDebit, sum of soConPhaiThu      22,751,078,855
@@ -219,13 +219,15 @@ general ledger 131, closing debit            3,402,625,442   (closing credit 247
 dashboard "Phải thu khách hàng", 2026        1,717,272,006
 ```
 
-All three claim to describe money owed by customers. Nothing observed explains
-the gap, and each is internally consistent on its own terms.
+They measure three different things, and the reconciliation is written up in
+[EasyBooks receivables reconciliation](easybooks-receivables-reconciliation.md).
+In short: the debt report is gross of about 18.8 billion dong of customer money
+that has been banked but never offset against invoices; the ledger nets it; and
+the dashboard is period movement rather than a balance.
 
-This must be put to whoever maintains the EasyBooks books before any receivables
-figure is published in UniOps. Choosing one of the three without that answer
-would mean UniOps stating a debt figure it cannot defend — worse than the current
-honest `UNKNOWN`, because a number invites decisions.
+The conclusion below stands, and the reason is now stronger: the debt report
+cannot be published because it overstates by roughly seven times, and the ledger
+figure that is correct is only available company-wide.
 
 ## What follows for the data model
 
