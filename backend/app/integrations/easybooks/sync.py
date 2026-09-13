@@ -45,6 +45,7 @@ from app.models import (
     SyncStatus,
     utc_now,
 )
+from app.services.catalog import allocate_sku
 
 logger = logging.getLogger(__name__)
 
@@ -317,7 +318,17 @@ def _catalog_product(session: Session, item: CatalogItem) -> None:
         criteria.append(Product.code == code)
     product = session.scalar(select(Product).where(or_(*criteria)))
     if product is None:
-        session.add(Product(code=code, name=name, unit=unit, easybooks_material_goods_id=source_id))
+        # A product EasyBooks knows and UniOps does not becomes a canonical
+        # product with a UniOps SKU; EasyBooks stays the mapping, not the master.
+        session.add(
+            Product(
+                sku=allocate_sku(session),
+                code=code,
+                name=name,
+                unit=unit,
+                easybooks_material_goods_id=source_id,
+            )
+        )
     else:
         product.name = name
         product.unit = unit

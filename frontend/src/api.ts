@@ -13,6 +13,7 @@ import type {
   PurchaseSummary,
   Receivables,
   Product,
+  ProductStatus,
   SalesSummary,
   SyncRun,
   User,
@@ -166,11 +167,42 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ ...payload, tax_code: payload.tax_code?.trim() || null }),
     }),
-  products: () => request<Product[]>("/api/products"),
-  createProduct: (payload: { code?: string; name: string; unit: string }) =>
+  products: (params?: { search?: string; status?: ProductStatus }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set("search", params.search);
+    if (params?.status) query.set("status", params.status);
+    const qs = query.toString();
+    return request<Product[]>(`/api/products${qs ? `?${qs}` : ""}`);
+  },
+  // No SKU is sent: UniOps assigns it, and the API refuses one.
+  createProduct: (payload: {
+    name: string;
+    unit: string;
+    code?: string;
+    category?: string;
+    specifications?: Record<string, unknown>;
+  }) =>
     request<Product>("/api/products", {
       method: "POST",
-      body: JSON.stringify({ ...payload, code: payload.code?.trim() || null }),
+      body: JSON.stringify({
+        ...payload,
+        code: payload.code?.trim() || null,
+        ...(payload.category?.trim() ? { category: payload.category.trim() } : {}),
+      }),
+    }),
+  updateProduct: (
+    id: string,
+    payload: {
+      name?: string;
+      unit?: string;
+      category?: string;
+      status?: ProductStatus;
+      specifications?: Record<string, unknown>;
+    },
+  ) =>
+    request<Product>(`/api/products/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
     }),
   orders: (search = "") =>
     request<OrderList>(`/api/orders?search=${encodeURIComponent(search)}&limit=500`),

@@ -35,12 +35,22 @@ export interface Customer {
   easybooks_accounting_object_code: string | null;
 }
 
+export type ProductStatus = "active" | "discontinued";
+
+/** A canonical product. `sku` is assigned by UniOps and never changes; `code` is
+ * the EasyBooks material goods code. */
 export interface Product {
   id: string;
-  code: string | null;
+  sku: string;
   name: string;
   unit: string;
+  category: string;
+  status: ProductStatus;
+  specifications: Record<string, unknown>;
+  code: string | null;
   easybooks_material_goods_id: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface OrderLine {

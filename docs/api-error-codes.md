@@ -34,6 +34,9 @@ This document catalogs machine-readable error codes returned by the UniOps API. 
 | `ORDER_HAS_LINKED_INVOICES` | 409 Conflict | Cannot cancel an order with linked invoices. | `{}` |
 | `CUSTOMER_CODE_EXISTS` | 409 Conflict | Customer source code already exists in catalog. | `{}` |
 | `PRODUCT_CODE_EXISTS` | 409 Conflict | Product code already exists in catalog. | `{}` |
+| `PRODUCT_NOT_FOUND` | 404 Not Found | The canonical product does not exist. | `{}` |
+| `SKU_SEQUENCE_EXHAUSTED` | 409 Conflict | No SKUs are left after UG999999. | `{}` |
+| `CATALOG_SERVICE_KEY_INVALID` | 401 Unauthorized | The `X-UniOps-Catalog-Key` header did not match the configured key. | `{}` |
 | `INVOICE_ALREADY_LINKED` | 409 Conflict | Invoice is already linked to this order. | `{}` |
 | `CANNOT_LINK_CANCELLED_ORDER` | 409 Conflict | Invoices cannot be linked to cancelled orders. | `{}` |
 | `REQUIRED_DATE_BEFORE_ORDER_DATE` | 422 Unprocessable | Required delivery date is before order date. | `{}` |

@@ -15,6 +15,10 @@ from sqlalchemy import Engine, create_engine, func, inspect, select, text
 from app.database import Base
 from app.security import as_utc
 
+# Tables a migration seeds with their single starting row. The source's row
+# replaces the target's instead of making the target count as not empty.
+_SEEDED_SINGLETON_TABLES = frozenset({"product_sku_sequence"})
+
 
 class TransferRefused(Exception):
     """A precondition failed, so nothing was copied."""
@@ -81,6 +85,8 @@ def _transfer(source: Engine, target: Engine, batch_size: int) -> TransferSummar
         for table in tables:
             if not target_inspector.has_table(table.name):
                 raise TransferRefused(f"the target database is missing the {table.name} table")
+            if table.name in _SEEDED_SINGLETON_TABLES:
+                continue
             existing = connection.scalar(select(func.count()).select_from(table))
             if existing:
                 raise TransferRefused(
@@ -94,6 +100,8 @@ def _transfer(source: Engine, target: Engine, batch_size: int) -> TransferSummar
     with source.connect() as reader, target.begin() as writer:
         for table in tables:
             copied = 0
+            if table.name in _SEEDED_SINGLETON_TABLES:
+                writer.execute(table.delete())
             result = reader.execution_options(stream_results=True).execute(select(table))
             while batch := result.mappings().fetchmany(batch_size):
                 writer.execute(table.insert(), [_normalize(dict(row)) for row in batch])

@@ -115,6 +115,7 @@ The repository is a small monorepo:
 - `docs/order-to-cash.md`: order/invoice linking, receivables, and what EasyBooks does not expose;
 - `docs/operations.md`: accounts, PostgreSQL deployment, and backups;
 - `docs/easybooks-integration.md`: source-specific contract and live setup boundary;
+- `docs/product-master.md`: canonical products, the SKU policy, and the Unigreen catalogue boundary;
 - `docs/glossary-vi.md`: the Vietnamese wording, with every accounting term marked unsupported, unconfirmed, or draft;
 - `docs/human-pilot-checklist.md`: the facilitated pilot script, including the final V1 validation round;
 - `docs/pilot-survey-v2.md`: the corrected pilot survey design, which separates finance authority from display preference.

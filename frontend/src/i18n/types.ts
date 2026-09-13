@@ -38,6 +38,7 @@ export type ErrorDict = {
   ORDER_HAS_LINKED_INVOICES: string;
   CUSTOMER_CODE_EXISTS: string;
   PRODUCT_CODE_EXISTS: string;
+  SKU_SEQUENCE_EXHAUSTED: string;
   INVOICE_ALREADY_LINKED: string;
   CANNOT_LINK_CANCELLED_ORDER: string;
   REQUIRED_DATE_BEFORE_ORDER_DATE: string;
@@ -62,6 +63,7 @@ export interface Dictionary {
   nav: {
     overview: string;
     orders: string;
+    products: string;
     finance: string;
     data: string;
     newOrder: string;
@@ -420,6 +422,41 @@ export interface Dictionary {
   firstUse: {
     body: string;
     dismiss: string;
+  };
+  productsView: {
+    title: string;
+    context: string;
+    searchPlaceholder: string;
+    allStatuses: string;
+    active: string;
+    discontinued: string;
+    newProduct: string;
+    createTitle: string;
+    /** Says the SKU is assigned by UniOps and never typed or changed. */
+    skuAssigned: string;
+    created: (sku: string) => string;
+    discontinue: string;
+    reactivate: string;
+    specificationsInvalid: string;
+    loadFailed: string;
+    columns: {
+      sku: string;
+      name: string;
+      category: string;
+      unit: string;
+      status: string;
+      easybooksCode: string;
+      specifications: string;
+      actions: string;
+    };
+    fields: {
+      name: string;
+      unit: string;
+      category: string;
+      easybooksCode: string;
+      specifications: string;
+    };
+    empty: string;
   };
   common: {
     save: string;

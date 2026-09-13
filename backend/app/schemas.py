@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models import LinkMethod, OrderStatus, UserRole
+from app.models import LinkMethod, OrderStatus, ProductStatus, UserRole
 from app.security import as_utc
 from app.services.exceptions_view import ExceptionCategory
 from app.services.order_to_cash import AccountingStatus, DueStatus, PaymentStatus
@@ -35,14 +35,48 @@ class CustomerRead(CustomerCreate):
 
 
 class ProductCreate(ApiModel):
-    code: str | None = Field(default=None, max_length=100)
+    # A SKU is never accepted from a caller: it is allocated by UniOps. Unknown
+    # fields are rejected so a client that sends one learns that immediately.
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
     name: str = Field(min_length=1, max_length=255)
     unit: str = Field(min_length=1, max_length=50)
+    category: str = Field(default="general", min_length=1, max_length=100)
+    status: ProductStatus = ProductStatus.ACTIVE
+    specifications: dict[str, Any] = Field(default_factory=dict)
+    # EasyBooks material goods code.
+    code: str | None = Field(default=None, max_length=100)
     easybooks_material_goods_id: str | None = Field(default=None, max_length=100)
 
 
-class ProductRead(ProductCreate):
+class ProductUpdate(ApiModel):
+    """The fields of a canonical product that may change.
+
+    `sku` and `id` are absent on purpose: they are immutable. The EasyBooks
+    mapping (`code`, `easybooks_material_goods_id`) is absent too; it is written
+    by the EasyBooks sync. A materially different product (ply, dimensions,
+    pack configuration) is a new product with a new SKU, not an edit.
+    """
+
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    unit: str | None = Field(default=None, min_length=1, max_length=50)
+    category: str | None = Field(default=None, min_length=1, max_length=100)
+    status: ProductStatus | None = None
+    specifications: dict[str, Any] | None = None
+
+
+class ProductRead(ApiModel):
     id: str
+    sku: str
+    name: str
+    unit: str
+    category: str
+    status: ProductStatus
+    specifications: dict[str, Any]
+    code: str | None
+    easybooks_material_goods_id: str | None
     created_at: datetime
     updated_at: datetime
 
