@@ -11,7 +11,7 @@ from app.schemas import ProductCreate, ProductUpdate
 from app.services import catalog
 from pydantic import SecretStr, ValidationError
 from sqlalchemy import delete, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 SERVICE_KEY = "k" * 40
@@ -59,7 +59,10 @@ def test_the_database_rejects_a_duplicate_sku(session):
 @pytest.mark.parametrize("sku", ["XX000001", "UG1", "UG0000001"])
 def test_the_database_rejects_a_malformed_sku(session, sku):
     session.add(Product(sku=sku, name="Bad", unit="Cuộn"))
-    with pytest.raises(IntegrityError):
+    # PostgreSQL rejects an over-long value at the VARCHAR(8) type (DataError)
+    # before the check constraint runs; SQLite ignores the length and the
+    # constraint rejects it (IntegrityError). Both mean the row was refused.
+    with pytest.raises((IntegrityError, DataError)):
         session.commit()
     session.rollback()
 
