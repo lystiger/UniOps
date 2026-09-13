@@ -2,6 +2,9 @@
 
 > **Boundary Reminder**: EasyBooks is the accounting system of record. UniOps does not guess, create, or alter accounting facts. The items listed below require explicit policy decisions and validation from the company bookkeeper, chief accountant, or finance director.
 
+> [!IMPORTANT]
+> **Round 1 did not answer any of these.** The Round 1 survey put specific accounting topics and *"Không cần xác nhận thêm"* in the same checkbox group, so respondents selected both and the finance answers contradict themselves. It also had no way for a respondent to say they lack the authority to decide. Every topic below therefore remains open. The corrected instrument is [pilot-survey-v2.md](pilot-survey-v2.md), which asks preference and official rule as separate questions and requires a named approval owner.
+
 ---
 
 ## 1. Authoritative Receivables & Debt Interpretation
@@ -19,6 +22,7 @@
 * **Observed Reality**:
   * Because payment linkages do not exist on sales documents in EasyBooks, UniOps currently sets `payment_status = "UNKNOWN"` on all invoice cards and analytical summaries, explicitly displaying:
     > *"EasyBooks exposes no paid or outstanding amount on any observed sales document, and no payment source has been ingested."*
+  * **Pilot 1 finding (2026-09-11)**: the Vietnamese label for `UNKNOWN` was *"Chưa có thông tin"*, and **one of two** task participants read it as *"the customer definitely has not paid"*. The label is now *"Chưa có dữ liệu xác nhận thanh toán"* / *"No payment confirmation data"*, with a supporting note naming all four conclusions UniOps cannot draw and pointing at EasyBooks. A backend test (`test_no_route_ever_states_a_settlement_the_source_cannot_prove`) now walks the accounting and receivables responses and fails if any string equals `PAID`, `UNPAID`, `PARTIALLY_PAID`, `DUE` or `OVERDUE`.
 * **Open Questions for Bookkeeper**:
   1. Should an invoice ever be inferred as "PAID" based solely on FIFO (First-In, First-Out) matching of receipts to invoices?
   2. If partial payments occur, what threshold or rule distinguishes `PARTIALLY_PAID` from `PAID`?
@@ -92,10 +96,10 @@
 
 | Topic | Current UniOps Behavior | Decision Needed From Bookkeeper / Management |
 |---|---|---|
-| 1. Receivables balance | Displays `—` with explanation note | Authoritative source for customer debt (Account 131 ledger vs dynamic report) |
-| 2. Invoice payment status | Hardcoded `UNKNOWN` | Whether FIFO matching is permitted or explicit allocation required |
-| 3. Due dates & terms | Displays `—` with `UNKNOWN` due status | Standard customer credit terms table (days) and overdue calculation base |
-| 4. Revenue KPI base | Displays gross total with separate VAT metric | Confirm whether Net or Gross is official revenue KPI |
+| 1. Receivables balance | Displays *"Chưa có dữ liệu xác nhận"* / *"No confirmation data"* with explanation note; `null`, never `0` | Authoritative source for customer debt (Account 131 ledger vs dynamic report) — and its **exact EasyBooks report name** (asked in [pilot-survey-v2.md](pilot-survey-v2.md) §6 E1) |
+| 2. Invoice payment status | Hardcoded `UNKNOWN`, shown as *"Chưa có dữ liệu xác nhận thanh toán"* with a note naming the four conclusions UniOps cannot draw | Whether FIFO matching is permitted or explicit allocation required |
+| 3. Due dates & terms | Displays `—` with `UNKNOWN` due status; no overdue figure is computed anywhere | Standard customer credit terms table (days) and overdue calculation base |
+| 4. Revenue KPI base | Displays gross total with separate VAT metric. **Not confirmed as the company standard.** The New Order price helper is deliberately silent on VAT for the same reason | Confirm whether Net or Gross is official revenue KPI, asked as a **rule** question separate from display preference ([pilot-survey-v2.md](pilot-survey-v2.md) §5 D1) |
 | 5. Profit / margin metrics | Only displays `Sales − Purchases` | Provide official COGS methodology if margin reports are desired in V2 |
 | 6. Debit / Credit KPIs | Purchases carry tkNo (152, 154, 6421, 6422) and tkCo (331); sales carry no ledger accounts. UniOps uses purchase accounts only for raw line hashing | Specify which ledger accounts (Nợ/Có) govern future financial reporting |
 | 7. Operational Invoiced status | Allows advancing to `INVOICED` without invoice link | Confirm whether linking an invoice should be mandatory before `INVOICED` |

@@ -8,6 +8,9 @@ beforeEach(() => {
     // Views render straight after the session check, not after the first-open
     // splash's minimum display time. splash.test.tsx covers the splash itself.
     localStorage.setItem("uniops.splashSeen", "1");
+    // Same reason: the one-time first-use callout would otherwise sit above
+    // every view under test. FirstUseHint.test.tsx clears this key itself.
+    localStorage.setItem("uniops.firstUseHintDismissed", "1");
   } catch {
     // ignore
   }

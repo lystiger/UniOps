@@ -32,6 +32,25 @@ async function signIn(page: Page) {
   await expect(page.getByRole("heading", { name: "Order board" })).toBeVisible();
 }
 
+test("the first-use note appears once and stays dismissed", async ({ page }) => {
+  await signIn(page);
+
+  // Pilot 1 facilitator note: "cũng phải mất thời gian để làm quen". One line,
+  // one button - no tour, no carousel, no overlay.
+  const hint = page.locator(".first-use-hint");
+  await expect(hint).toBeVisible();
+  await expect(hint).toContainText("still has to be checked directly in EasyBooks");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await hint.getByRole("button", { name: "Got it" }).click();
+  await expect(hint).toHaveCount(0);
+
+  // A reload is the real test: the dismissal is remembered for this browser.
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Order board" })).toBeVisible();
+  await expect(page.locator(".first-use-hint")).toHaveCount(0);
+});
+
 test("Overview shows real order and EasyBooks-derived commercial figures", async ({ page }) => {
   await signIn(page);
   await page.getByRole("button", { name: "Overview" }).click();
@@ -50,9 +69,12 @@ test("Overview shows real order and EasyBooks-derived commercial figures", async
   await expect(salesStat.locator(".stat-value")).not.toHaveText("—");
   await expect(salesStat.locator(".stat-value")).toContainText("₫");
 
-  // Receivables outstanding is unknown at the source, never a fabricated 0 ₫.
+  // Receivables outstanding is unsupported at the source, never a fabricated 0 ₫
+  // and never the same bare dash a failed load would leave behind.
   const receivablesStat = page.locator(".stat", { hasText: "Receivables outstanding" });
-  await expect(receivablesStat.locator(".stat-value")).toHaveText("—");
+  await expect(receivablesStat.locator(".stat-value")).toHaveText("No confirmation data");
+  await expect(receivablesStat.locator(".value-unsupported")).toBeVisible();
+  await expect(receivablesStat.locator(".value-load-failed")).toHaveCount(0);
 
   await expect(page.getByText(/Last EasyBooks sync:/)).toBeVisible();
 });

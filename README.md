@@ -114,7 +114,10 @@ The repository is a small monorepo:
 - `docs/data-architecture.md`: the layers, the connector boundary, and lineage;
 - `docs/order-to-cash.md`: order/invoice linking, receivables, and what EasyBooks does not expose;
 - `docs/operations.md`: accounts, PostgreSQL deployment, and backups;
-- `docs/easybooks-integration.md`: source-specific contract and live setup boundary.
+- `docs/easybooks-integration.md`: source-specific contract and live setup boundary;
+- `docs/glossary-vi.md`: the Vietnamese wording, with every accounting term marked unsupported, unconfirmed, or draft;
+- `docs/human-pilot-checklist.md`: the facilitated pilot script, including the final V1 validation round;
+- `docs/pilot-survey-v2.md`: the corrected pilot survey design, which separates finance authority from display preference.
 
 PostgreSQL 17 is the integrated-development baseline and production deployment target. SQLite remains supported for fast unit tests and isolated local checks. The same test suite runs against PostgreSQL with `make test-pg`, so portability is a checked claim rather than an assumption. API handlers are async entry points around short synchronous database operations; this is intentionally simple for current load and should be revisited before high concurrency.
 

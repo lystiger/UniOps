@@ -133,6 +133,65 @@ describe("i18n infrastructure", () => {
       }
     });
 
+    it("never lets UNKNOWN payment read as a settlement in either language", () => {
+      // Pilot finding: "Chưa có thông tin" was read as "the customer has not
+      // paid". UNKNOWN means UniOps has no payment data, and neither wording may
+      // contain the word for a settled, unsettled, or overdue invoice.
+      expect(viDict.accounting.paymentStatus.UNKNOWN).toBe("Chưa có dữ liệu xác nhận thanh toán");
+      expect(en.accounting.paymentStatus.UNKNOWN).toBe("No payment confirmation data");
+
+      for (const forbidden of ["Chưa thanh toán", "Đã thanh toán", "Quá hạn"]) {
+        expect(viDict.accounting.paymentStatus.UNKNOWN).not.toContain(forbidden);
+      }
+      for (const forbidden of ["Unpaid", "Paid", "Overdue", "Partially"]) {
+        expect(en.accounting.paymentStatus.UNKNOWN).not.toContain(forbidden);
+      }
+
+      // And the note beside it names all four conclusions UniOps cannot draw,
+      // and points at the system that can.
+      for (const note of [viDict.accounting.paymentUnknownNote, en.accounting.paymentUnknownNote]) {
+        expect(note).toContain("EasyBooks");
+      }
+      expect(viDict.accounting.paymentUnknownNote).toContain("trả một phần");
+      expect(viDict.accounting.paymentUnknownNote).toContain("quá hạn");
+      expect(en.accounting.paymentUnknownNote).toContain("partially paid");
+      expect(en.accounting.paymentUnknownNote).toContain("overdue");
+    });
+
+    it("keeps each locale wholly in its own language for the new pilot copy", () => {
+      // No mixed-language UI: only the product names stay English.
+      const viOnly = [
+        viDict.firstUse.body,
+        viDict.firstUse.dismiss,
+        viDict.newOrder.requiredLegend,
+        viDict.newOrder.descriptionHelp,
+        viDict.newOrder.quantityHelp,
+        viDict.newOrder.agreedPriceHelp,
+        viDict.newOrder.errors.quantityInvalid,
+        viDict.common.unsupportedValue,
+        viDict.common.loadFailedValue,
+      ];
+      for (const text of viOnly) {
+        expect(text).toBeTruthy();
+        expect(text.replace(/UniOps|EasyBooks/g, "")).not.toMatch(
+          /\b(the|and|data|payment|order|required|quantity|price|unit)\b/i,
+        );
+      }
+
+      const enOnly = [
+        en.firstUse.body,
+        en.newOrder.requiredLegend,
+        en.newOrder.descriptionHelp,
+        en.common.unsupportedValue,
+        en.common.loadFailedValue,
+      ];
+      for (const text of enOnly) {
+        expect(text).toBeTruthy();
+        // No Vietnamese diacritics anywhere in the English dictionary.
+        expect(text).not.toMatch(/[ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộòơờớởỡợùúủũụừứửữựỳýỷỹỵ]/i);
+      }
+    });
+
     it("covers every SyncRunStatus", () => {
       const statuses: SyncRunStatus[] = ["RUNNING", "SUCCEEDED", "PARTIAL", "FAILED"];
       for (const s of statuses) {
@@ -523,7 +582,15 @@ describe("Vietnamese view English leakage checks", () => {
     );
 
     expect(await screen.findByText("Chưa liên kết hóa đơn")).toBeInTheDocument();
-    expect(screen.getByText("Chưa có thông tin")).toBeInTheDocument();
+    expect(screen.getByText("Chưa có dữ liệu xác nhận thanh toán")).toBeInTheDocument();
+    // The pilot read "Chưa có thông tin" as "the customer has not paid"; no
+    // Vietnamese view may state or imply a settlement UniOps cannot see.
+    expect(screen.queryByText("Chưa thanh toán")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "UniOps chưa có đủ dữ liệu để kết luận đã trả, chưa trả, trả một phần hoặc quá hạn. Hãy kiểm tra EasyBooks.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("Công nợ chưa thu")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Đóng" })).toBeInTheDocument();
     expect(screen.queryByText("Not invoiced")).not.toBeInTheDocument();

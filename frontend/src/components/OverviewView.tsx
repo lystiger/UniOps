@@ -8,12 +8,14 @@ import {
   DataTable,
   EmptyState,
   ErrorState,
+  LoadFailedValue,
   PageHeader,
   Section,
   Skeleton,
   Stat,
   StatRow,
   SyncStatus,
+  UnsupportedValue,
 } from "./primitives";
 import { StatusBadge } from "./StatusBadge";
 import type { ExceptionCategory, ExceptionItem, Order } from "../types";
@@ -343,9 +345,13 @@ export function OverviewView({
             <Stat
               label={t.overview.stats.receivablesOutstanding}
               value={
-                receivables.error
-                  ? "—"
-                  : money(receivables.data?.total_outstanding ?? null)
+                receivables.error ? (
+                  <LoadFailedValue />
+                ) : (receivables.data?.total_outstanding ?? null) === null ? (
+                  <UnsupportedValue />
+                ) : (
+                  money(receivables.data?.total_outstanding)
+                )
               }
             />
             <Stat label={t.overview.stats.salesMinusPurchases} value={money(commercial.data?.sales_minus_purchases)} />

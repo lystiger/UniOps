@@ -192,6 +192,27 @@ export function ErrorState({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A figure the accounting source does not support, in words.
+ *
+ * Six states have to stay apart wherever money is shown, because reading one as
+ * another is a business error: a real **zero** ("0 ₫"), an **empty** result
+ * ({@link EmptyState}), **loading** ({@link Skeleton}), an **error**
+ * ({@link ErrorState} or {@link LoadFailedValue}), and an **unsupported** figure —
+ * this one. Unsupported means EasyBooks exposes nothing to compute it from, which
+ * is not a failure, so this is muted, never a warning colour.
+ */
+export function UnsupportedValue() {
+  const t = useT();
+  return <span className="value-unsupported">{t.common.unsupportedValue}</span>;
+}
+
+/** A figure whose request failed. Kept apart from {@link UnsupportedValue}: retrying may help. */
+export function LoadFailedValue() {
+  const t = useT();
+  return <span className="value-load-failed">{t.common.loadFailedValue}</span>;
+}
+
 export function Skeleton({ rows = 3 }: { rows?: number }) {
   return (
     <div className="skeleton" aria-hidden="true">

@@ -10,12 +10,14 @@ import {
   EmptyState,
   ErrorState,
   FilterBar,
+  LoadFailedValue,
   PageHeader,
   Section,
   Skeleton,
   Stat,
   StatRow,
   SyncStatus,
+  UnsupportedValue,
 } from "./primitives";
 import type { CustomerReceivable, CustomerReceivableDetail, MonthlyAmount } from "../types";
 
@@ -115,7 +117,15 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
             <Stat label={t.finance.stats.purchases} value={money(overview.data?.purchases.total)} />
             <Stat
               label={t.finance.receivablesOutstanding}
-              value={receivables.error ? "—" : money(receivables.data?.total_outstanding ?? null)}
+              value={
+                receivables.error ? (
+                  <LoadFailedValue />
+                ) : (receivables.data?.total_outstanding ?? null) === null ? (
+                  <UnsupportedValue />
+                ) : (
+                  money(receivables.data?.total_outstanding)
+                )
+              }
             />
             <Stat label={t.finance.salesMinusPurchases} value={money(overview.data?.sales_minus_purchases)} />
           </StatRow>
@@ -246,7 +256,7 @@ export function FinanceView({ onSessionLost }: { onSessionLost: () => void }) {
                       header: t.finance.columns.outstanding,
                       align: "right",
                       render: (row: CustomerReceivable) =>
-                        row.outstanding_amount === null ? t.finance.unavailable : money(row.outstanding_amount),
+                        row.outstanding_amount === null ? <UnsupportedValue /> : money(row.outstanding_amount),
                     },
                   ]}
                   rows={receivables.data.customers}
@@ -333,7 +343,13 @@ function CustomerReceivableDrawer({
               </div>
               <div>
                 <dt>{t.finance.columns.outstanding}</dt>
-                <dd>{detail.total_outstanding === null ? "—" : money(detail.total_outstanding)}</dd>
+                <dd>
+                  {detail.total_outstanding === null ? (
+                    <UnsupportedValue />
+                  ) : (
+                    money(detail.total_outstanding)
+                  )}
+                </dd>
               </div>
             </dl>
             {detail.total_outstanding === null && detail.outstanding_status === "NO_PAYMENT_SOURCE" && (
@@ -351,7 +367,8 @@ function CustomerReceivableDrawer({
                     key: "outstanding",
                     header: t.finance.columns.outstanding,
                     align: "right",
-                    render: (row) => (row.outstanding_amount === null ? t.finance.unavailable : money(row.outstanding_amount)),
+                    render: (row) =>
+                      row.outstanding_amount === null ? <UnsupportedValue /> : money(row.outstanding_amount),
                   },
                   { key: "order", header: t.finance.columns.linkedOrder, render: (row) => row.linked_order_numbers.join(", ") || "—" },
                 ]}

@@ -3,6 +3,7 @@ import { api } from "./api";
 import { AccountMenu } from "./components/AccountMenu";
 import { DataView } from "./components/DataView";
 import { FinanceView } from "./components/FinanceView";
+import { FirstUseHint } from "./components/FirstUseHint";
 import { LoadingScreen, SessionCheckPending } from "./components/LoadingScreen";
 import { Login } from "./components/Login";
 import { NewOrder } from "./components/NewOrder";
@@ -141,6 +142,8 @@ export function AppInner() {
           <AccountMenu user={user} onSignedOut={handleSessionLost} />
         </div>
       </header>
+
+      <FirstUseHint />
 
       <main>
         {view === "overview" && (

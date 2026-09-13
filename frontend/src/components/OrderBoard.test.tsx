@@ -53,6 +53,26 @@ describe("OrderBoard", () => {
     );
   });
 
+  it("tells a read-only role what happens next without offering a control it cannot use", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ items: [{ ...order, status: "IN_PRODUCTION" }], total: 1 }),
+        { status: 200 },
+      ),
+    );
+
+    render(<OrderBoard refreshKey={0} canWrite={false} onNewOrder={() => undefined} />);
+
+    expect(await screen.findByText("Fixture Customer")).toBeInTheDocument();
+    // The factory pilot has to be able to name the next step from the card.
+    expect(screen.getByText("Next step:")).toBeInTheDocument();
+    expect(screen.getByText("Mark ready")).toBeInTheDocument();
+    // But every control that would change the order stays out of the page.
+    expect(screen.queryByRole("button", { name: "Mark ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "+ New order" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Cancel order/ })).not.toBeInTheDocument();
+  });
+
   it("offers a direct new-order action when the board is empty", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 }),

@@ -60,6 +60,7 @@ export const vi: Dictionary = {
     activeOrdersSummary: ({ count, overdueCount }: { count: number; overdueCount: number }) =>
       `${count} đơn hàng đang xử lý${overdueCount > 0 ? ` · ${overdueCount} trễ hạn giao` : ""}`,
     overdueDelivery: "Trễ hạn giao",
+    nextStep: "Bước tiếp theo:",
     requiredLabel: "Hạn giao",
     accountingAria: (orderNumber: string) => `Kế toán cho đơn ${orderNumber}`,
     noLines: "Chưa có mặt hàng",
@@ -73,11 +74,13 @@ export const vi: Dictionary = {
       INVOICED: "Đã liên kết hóa đơn",
     },
     paymentStatus: {
-      UNKNOWN: "Chưa có thông tin",
+      UNKNOWN: "Chưa có dữ liệu xác nhận thanh toán",
       UNPAID: "Chưa thanh toán",
       PARTIALLY_PAID: "Thanh toán một phần",
       PAID: "Đã thanh toán",
     },
+    paymentUnknownNote:
+      "UniOps chưa có đủ dữ liệu để kết luận đã trả, chưa trả, trả một phần hoặc quá hạn. Hãy kiểm tra EasyBooks.",
     dialogAria: (orderNumber: string) => `Kế toán cho đơn ${orderNumber}`,
     loading: "Đang tải thông tin kế toán…",
     facts: {
@@ -234,7 +237,6 @@ export const vi: Dictionary = {
     noInvoicesPeriod: "Không có hóa đơn nào trong kỳ này.",
     noDocumentsDatedInPeriod: "Không có chứng từ có ngày trong khoảng thời gian này.",
     noInvoicesForCustomer: "Không có hóa đơn nào cho khách hàng này.",
-    unavailable: "Chưa có số liệu",
     customerInvoicesAria: (name: string) => `Hóa đơn của ${name}`,
     customerInvoicesTitle: (name: string) => `Hóa đơn của ${name}`,
     loadingInvoices: "Đang tải danh sách hóa đơn…",
@@ -320,6 +322,7 @@ export const vi: Dictionary = {
   },
   newOrder: {
     title: "Tạo đơn hàng mới",
+    requiredLegend: "Các trường có dấu * là bắt buộc.",
     orderDetails: "Thông tin đơn hàng",
     customer: "Khách hàng",
     chooseCustomer: "Chọn khách hàng",
@@ -329,9 +332,13 @@ export const vi: Dictionary = {
     product: "Sản phẩm",
     customItem: "Mặt hàng tùy chỉnh",
     description: "Mô tả sản phẩm",
+    descriptionHelp: "Tự động điền theo sản phẩm đã chọn; có thể sửa lại.",
     quantity: "Số lượng",
+    quantityHelp: "Tính theo đơn vị ghi ở ô bên cạnh.",
     unit: "Đơn vị tính",
+    unitHelp: "Ví dụ: kg.",
     agreedPrice: "Đơn giá thỏa thuận",
+    agreedPriceHelp: "Đơn giá cho một đơn vị, tính bằng đồng (₫).",
     optional: "Không bắt buộc",
     removeLineAria: (index: number) => `Xóa dòng sản phẩm ${index}`,
     removeLine: "Xóa",
@@ -355,6 +362,7 @@ export const vi: Dictionary = {
     productAdded: "Đã thêm sản phẩm",
     errors: {
       chooseCustomerFirst: "Vui lòng chọn khách hàng trước khi lưu đơn",
+      quantityInvalid: "Số lượng phải là một số lớn hơn 0.",
       loadCatalog: "Không thể tải danh mục khách hàng và sản phẩm",
       orderNotSaved: "Không thể lưu đơn hàng",
       customerNotAdded: "Không thể thêm khách hàng",
@@ -393,6 +401,11 @@ export const vi: Dictionary = {
     lastSyncAttempt: (time: string) => `Lần thử đồng bộ EasyBooks gần nhất ${time}`,
     lastSync: (time: string) => `Đồng bộ EasyBooks gần nhất: ${time}`,
   },
+  firstUse: {
+    body:
+      "UniOps tập trung thông tin đơn hàng, dữ liệu EasyBooks và trạng thái đồng bộ tại một nơi. Một số thông tin tài chính vẫn cần kiểm tra trực tiếp trong EasyBooks.",
+    dismiss: "Đã hiểu",
+  },
   common: {
     save: "Lưu",
     saving: "Đang lưu…",
@@ -402,6 +415,9 @@ export const vi: Dictionary = {
     loading: "Đang tải…",
     empty: "Không có dữ liệu",
     required: "Bắt buộc",
+    optional: "Không bắt buộc",
+    unsupportedValue: "Chưa có dữ liệu xác nhận",
+    loadFailedValue: "Không tải được",
     status: "Trạng thái",
     datePlaceholder: "ngày/tháng/năm",
     invalidDate: "Ngày không hợp lệ. Nhập theo dạng ngày/tháng/năm, ví dụ 31/12/2026.",

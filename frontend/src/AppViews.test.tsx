@@ -154,6 +154,58 @@ describe("OverviewView", () => {
     expect(screen.queryByText(/NO_PAYMENT_SOURCE/)).not.toBeInTheDocument();
   });
 
+  it("keeps an unsupported receivables figure apart from a failed load", async () => {
+    mockApi();
+    const { container } = render(
+      <OverviewView
+        onNavigateOrders={() => undefined}
+        onNewOrder={() => undefined}
+        canWrite={true}
+        onSessionLost={() => undefined}
+      />,
+    );
+
+    // Six states have to stay legible apart wherever money is shown. Here the
+    // source supports no figure at all, which is not a zero and not a failure.
+    expect(await screen.findByText("Receivables outstanding")).toBeInTheDocument();
+    expect(container.querySelector(".value-unsupported")).toHaveTextContent("No confirmation data");
+    expect(container.querySelector(".value-load-failed")).toBeNull();
+    expect(screen.queryByText("0 ₫")).not.toBeInTheDocument();
+  });
+
+  it("says a receivables request failed in different words than an unsupported figure", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/analytics/receivables")) return new Response("{}", { status: 500 });
+      if (url.includes("/api/orders")) {
+        return new Response(JSON.stringify({ items: orders, total: orders.length }), { status: 200 });
+      }
+      if (url.includes("/api/operations/exceptions")) {
+        return new Response(JSON.stringify(exceptionReport), { status: 200 });
+      }
+      if (url.includes("/api/analytics/overview")) {
+        return new Response(JSON.stringify(commercialOverview), { status: 200 });
+      }
+      if (url.includes("/api/sync-runs")) return new Response(JSON.stringify([]), { status: 200 });
+      return new Response("{}", { status: 404 });
+    });
+
+    const { container } = render(
+      <OverviewView
+        onNavigateOrders={() => undefined}
+        onNewOrder={() => undefined}
+        canWrite={true}
+        onSessionLost={() => undefined}
+      />,
+    );
+
+    expect(await screen.findByText("Receivables outstanding")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(container.querySelector(".value-load-failed")).toHaveTextContent("Could not load"),
+    );
+    expect(container.querySelector(".value-unsupported")).toBeNull();
+  });
+
   it("shows an API error distinctly, not a blank or a zero", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : (input as Request).url;

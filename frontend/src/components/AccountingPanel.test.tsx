@@ -63,6 +63,49 @@ describe("AccountingPanel", () => {
     expect(screen.getByText("No invoice linked to this order.")).toBeInTheDocument();
   });
 
+  it("reports an unknown payment as missing data, never as a customer who has not paid", async () => {
+    route({
+      "/api/orders/order-1/accounting": () => json(notInvoiced),
+      "/api/orders/order-1/invoice-candidates": () => json([]),
+    });
+
+    render(<AccountingPanel order={order} canWrite onClose={() => undefined} onChanged={() => undefined} />);
+
+    // The first pilot read the old wording ("Chưa có thông tin" / "Unknown") as
+    // proof the customer had not paid. The label now names the missing data, and
+    // the note says in full which four conclusions UniOps cannot draw.
+    expect(await screen.findByText("Payment")).toBeInTheDocument();
+    expect(screen.getByText("Payment").nextElementSibling).toHaveTextContent(
+      "No payment confirmation data",
+    );
+    expect(
+      screen.getByText(/does not currently have enough data to determine whether the invoice is paid/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Check EasyBooks for confirmation/)).toBeInTheDocument();
+
+    // No settlement state UniOps cannot prove may appear anywhere on the panel.
+    for (const claim of ["Unpaid", "Paid", "Partially paid", "Overdue"]) {
+      expect(screen.queryByText(claim, { exact: true })).not.toBeInTheDocument();
+    }
+  });
+
+  it("marks an unsupported outstanding figure apart from a zero", async () => {
+    route({
+      "/api/orders/order-1/accounting": () => json(notInvoiced),
+      "/api/orders/order-1/invoice-candidates": () => json([]),
+    });
+
+    const { container } = render(
+      <AccountingPanel order={order} canWrite onClose={() => undefined} onChanged={() => undefined} />,
+    );
+
+    expect(await screen.findByText("Outstanding")).toBeInTheDocument();
+    expect(screen.getByText("Outstanding").nextElementSibling).toHaveTextContent("No confirmation data");
+    // Neither a fabricated zero nor the bare dash a missing value renders as.
+    expect(screen.queryByText("0 ₫")).not.toBeInTheDocument();
+    expect(container.querySelector(".value-unsupported")).not.toBeNull();
+  });
+
   it("names the production stage and link method in words, never as raw codes", async () => {
     route({
       "/api/orders/order-1/accounting": () =>

@@ -2371,6 +2371,100 @@ input[aria-invalid="true"],
   box-shadow: 0 0 0 3px var(--status-rejected-bg);
 }
 
+/* --- Unsupported / failed figures ---
+   A figure EasyBooks cannot support is not a warning: no amber, no red, no
+   badge. It is set in the muted ink and the compact face so it reads as a
+   sentence where a number would be, and never as a zero. A failed load is
+   separated from it by the rejected ink, because retrying may fix that one. */
+
+.value-unsupported,
+.value-load-failed {
+  font-family: var(--font-compact);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.value-unsupported {
+  color: var(--ink-muted);
+}
+
+.value-load-failed {
+  color: var(--status-rejected-text);
+}
+
+/* --- First-use callout: one paragraph, dismissed once, never shown again --- */
+
+.first-use-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 0 var(--page-gutter);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.first-use-hint p {
+  margin: 0;
+  max-width: 78ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+.first-use-hint button {
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .first-use-hint {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+/* --- Next step, stated to a role that cannot act on it --- */
+
+.next-step {
+  margin: 8px 0 0;
+  font-family: var(--font-compact);
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.next-step strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* --- Form field help & required marking --- */
+
+.field-help {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-muted);
+  line-height: 1.4;
+}
+
+.field-required {
+  color: var(--status-rejected-text);
+  margin-left: 2px;
+}
+
+.field-optional {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.form-required-legend {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
 /* --- Empty / loading states --- */
 
 .empty-state {

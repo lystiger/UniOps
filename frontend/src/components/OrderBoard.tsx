@@ -243,15 +243,23 @@ export function OrderBoard({
                         >
                           <AccountingBadge status={order.accounting_status} />
                         </button>
-                        {canWrite && nextStatus[order.status] && (
-                          <button
-                            className="advance-button"
-                            disabled={movingId === order.id}
-                            onClick={() => advance(order)}
-                          >
-                            {movingId === order.id ? t.orders.actions.updating : nextBtnLabel}
-                          </button>
-                        )}
+                        {nextBtnLabel &&
+                          (canWrite ? (
+                            <button
+                              className="advance-button"
+                              disabled={movingId === order.id}
+                              onClick={() => advance(order)}
+                            >
+                              {movingId === order.id ? t.orders.actions.updating : nextBtnLabel}
+                            </button>
+                          ) : (
+                            // FACTORY_READ may not move an order, but the floor still has to
+                            // know what the order is waiting for. The step is stated as text,
+                            // never as a control the role cannot use.
+                            <p className="next-step">
+                              <span>{t.orders.nextStep}</span> <strong>{nextBtnLabel}</strong>
+                            </p>
+                          ))}
                         {canWrite && cancellableStatuses.includes(order.status) && (
                           <button
                             className="cancel-order-button"

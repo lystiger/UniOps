@@ -5,6 +5,21 @@
 
 This document establishes the terminology used in the Vietnamese localization (`frontend/src/i18n/vi.ts`). Every entry is marked `DRAFT`. EasyBooks observed terms are preferred where applicable. Terms carrying accounting or financial implications are explicitly flagged.
 
+### Status meanings used in the `Status` column
+
+| Status | Meaning |
+|---|---|
+| `DRAFT` | Wording proposed by the build; still needs owner/bookkeeper review, but the underlying fact is one UniOps can observe. |
+| `UNSUPPORTED` | **The source cannot produce this fact at all today.** The wording exists only to say so. It must never be replaced by a term that asserts the fact. |
+| `NEEDS FINANCE CONFIRMATION` | The fact exists, but its official definition is a finance policy decision that has not been made. See [docs/finance-validation-questions.md](finance-validation-questions.md). |
+| `FUTURE / UNVALIDATED` | Not implemented in V1. Listed so nobody assumes it exists. |
+
+No entry in this document is `APPROVED`. Nothing below may be treated as final.
+
+### Pilot 1 correction (2026-09-11)
+
+The first pilot found that **`accounting.paymentStatus.UNKNOWN` = "Chưa có thông tin"** was read by one of two task participants as *"the customer definitely has not paid."* That is a conclusion UniOps has no data for. The wording was changed to **"Chưa có dữ liệu xác nhận thanh toán"** / **"No payment confirmation data"**, and a supporting note now names all four conclusions UniOps cannot draw. See section 5.
+
 ---
 
 ## 1. Navigation & Pages (Điều hướng & Trang)
@@ -89,9 +104,27 @@ This document establishes the terminology used in the Vietnamese localization (`
 
 ## 5. Payment Status (Trạng thái Thanh toán)
 
+> **All payment terminology below is `UNSUPPORTED`, not provisional wording awaiting a nicer phrase.** EasyBooks exposes no payment allocation on any observed sales document (`mbDepositID` and `mcReceiptID` are null on all 111). UniOps therefore has no data from which to conclude *đã trả*, *chưa trả*, *trả một phần*, or *quá hạn*. The only reachable state is `UNKNOWN`; `UNPAID`, `PARTIALLY_PAID` and `PAID` are declared in the code but unreachable and must not appear in any screen, document, or translation until a payment source is ingested **and** the bookkeeper has confirmed the matching rule (Topic 1 and Topic 2 of [docs/finance-validation-questions.md](finance-validation-questions.md)).
+
 | Key | English UI text | Vietnamese draft | Alternatives | Where used | Notes / risk | Status |
 |---|---|---|---|---|---|---|
-| `accounting.paymentStatus.UNKNOWN` | Unknown | Chưa có thông tin | Chưa rõ, Chưa xác định | `AccountingPanel`, `FinanceView` | **Accounting Critical**: EasyBooks does not expose payment allocation on sales invoices. Must NEVER be translated as "Chưa thanh toán" (Unpaid). | DRAFT |
+| `accounting.paymentStatus.UNKNOWN` | No payment confirmation data | Chưa có dữ liệu xác nhận thanh toán | *(none — see note)* | `AccountingPanel` | **Accounting Critical**: names the missing data, not a settlement. The previous "Chưa có thông tin" was misread in Pilot 1 as "chưa thanh toán". Must NEVER be replaced by "Chưa thanh toán", "Đã thanh toán", "Trả một phần" or "Quá hạn". | UNSUPPORTED |
+| `accounting.paymentUnknownNote` | UniOps does not currently have enough data to determine whether the invoice is paid, unpaid, partially paid, or overdue. Check EasyBooks for confirmation. | UniOps chưa có đủ dữ liệu để kết luận đã trả, chưa trả, trả một phần hoặc quá hạn. Hãy kiểm tra EasyBooks. | — | `AccountingPanel` | **Accounting Critical**: states all four conclusions UniOps cannot draw, and names EasyBooks as where the answer lives. | UNSUPPORTED |
+| `accounting.paymentStatus.UNPAID` | Unpaid | Chưa thanh toán | — | *(unreachable)* | **Do not display.** No observed EasyBooks field supports it. | UNSUPPORTED |
+| `accounting.paymentStatus.PARTIALLY_PAID` | Partially paid | Thanh toán một phần | — | *(unreachable)* | **Do not display.** Requires both a payment source and a bookkeeper-confirmed partial-payment threshold (Topic 2.2). | UNSUPPORTED |
+| `accounting.paymentStatus.PAID` | Paid | Đã thanh toán | — | *(unreachable)* | **Do not display.** Requires a bookkeeper-confirmed receipt-to-invoice allocation rule (Topic 2.1). | UNSUPPORTED |
+| `common.unsupportedValue` | No confirmation data | Chưa có dữ liệu xác nhận | Chưa có số liệu | `AccountingPanel`, `FinanceView`, `OverviewView` | **Accounting Critical**: the shared treatment for a figure the source cannot produce. Deliberately distinct from a zero, from an empty result, and from `common.loadFailedValue` (a request that failed). Rendered muted, never as a warning. | UNSUPPORTED |
+| `common.loadFailedValue` | Could not load | Không tải được | — | `FinanceView`, `OverviewView` | A failed request, which retrying may fix. Must not be confused with an unsupported figure. | DRAFT |
+
+### 5.1 Receivable, overdue and VAT terminology — not yet confirmed
+
+| Key | Vietnamese draft | What is unresolved | Status |
+|---|---|---|---|
+| `finance.receivablesOutstanding` | Số dư công nợ chưa thu | Which EasyBooks report is the official source of a customer balance — the `cong-no-phai-thu` dynamic report or the Account 131 ledger — is a bookkeeper decision (Topic 1). UniOps returns `null`, never `0`. | NEEDS FINANCE CONFIRMATION |
+| `finance.columns.outstanding` | Còn phải thu | Same as above, per invoice. Currently always rendered via `common.unsupportedValue`. | NEEDS FINANCE CONFIRMATION |
+| *(overdue semantics)* | Quá hạn thanh toán | No due date exists on any observed sales document, and standard credit terms per customer have not been supplied (Topic 3). UniOps reports `due_status = UNKNOWN` and must never compute overdue from the invoice date alone. Distinct from `orders.overdueDelivery` ("Trễ hạn giao"), which is a **delivery** deadline and is supported. | NEEDS FINANCE CONFIRMATION |
+| `finance.stats.vat` | Thuế GTGT | Whether the official sales figure is before VAT (`subtotal`) or after VAT (`totalAmount`) is a policy decision, not a display preference (Topic 4). UniOps currently shows the gross total with VAT as a separate figure, and this is **not** confirmed as the company standard. | NEEDS FINANCE CONFIRMATION |
+| *(payables / công nợ phải trả)* | Công nợ phải trả | Not implemented in V1. No supplier-balance figure exists anywhere in the product. Listed here only so that its absence is not mistaken for a zero. | FUTURE / UNVALIDATED |
 
 ---
 
@@ -125,11 +158,11 @@ This document establishes the terminology used in the Vietnamese localization (`
 |---|---|---|---|---|---|---|
 | `finance.sales` | Sales | Doanh số bán hàng | Doanh số | `FinanceView`, tabs | **Accounting Critical**: "Doanh số" represents gross commercial invoice volume, NOT recognized accounting revenue ("Doanh thu") (Topic 4). | DRAFT |
 | `finance.purchases` | Purchases | Chi mua hàng | Chi phí mua hàng, Mua vào | `FinanceView`, tabs | Total purchase invoice volume | DRAFT |
-| `finance.salesMinusPurchases` | Sales − purchases | Dòng thương mại (Bán − Mua) | Chênh lệch thương mại | `FinanceView`, `OverviewView` | **Accounting Critical**: MUST NOT be translated as "Lợi nhuận" (Profit), "Lãi", or "Biên độ" (Margin). This is gross commercial cashflow (Topic 5). | DRAFT |
+| `finance.salesMinusPurchases` | Sales − purchases | Dòng thương mại (Bán − Mua) | Chênh lệch thương mại | `FinanceView`, `OverviewView` | **Accounting Critical**: MUST NOT be translated as "Lợi nhuận" (Profit), "Lãi", or "Biên độ" (Margin). This is gross commercial cashflow (Topic 5). Verified in the Pilot 1 corrective pass: no backend field, schema, or screen labels it as profit. | NEEDS FINANCE CONFIRMATION |
 | `finance.receivables` | Receivables | Công nợ phải thu | Theo dõi công nợ | `FinanceView`, tabs | Sourced directly from EasyBooks report path `cong-no-phai-thu`. | DRAFT |
-| `finance.receivablesOutstanding` | Receivables outstanding | Số dư công nợ chưa thu | Nợ phải thu | `FinanceView` | Value is unknown (`—`) due to missing payment allocations (Topic 1). | DRAFT |
-| `finance.salesVat` | Output VAT | Thuế GTGT đầu ra | Thuế GTGT bán ra | `FinanceView` | VAT on sales documents | DRAFT |
-| `finance.purchaseVat` | Input VAT | Thuế GTGT đầu vào | Thuế GTGT khấu trừ | `FinanceView` | VAT on purchase documents | DRAFT |
+| `finance.receivablesOutstanding` | Receivables outstanding | Số dư công nợ chưa thu | Nợ phải thu | `FinanceView`, `OverviewView` | Value is unsupported at the source and renders as `common.unsupportedValue`, never as `0 ₫` and never as the bare `—` a failed load would leave (Topic 1). See §5.1. | NEEDS FINANCE CONFIRMATION |
+| `finance.salesVat` | Output VAT | Thuế GTGT đầu ra | Thuế GTGT bán ra | `FinanceView` | VAT on sales documents. Whether the headline sales figure should be before or after VAT is unconfirmed (Topic 4); see §5.1. | NEEDS FINANCE CONFIRMATION |
+| `finance.purchaseVat` | Input VAT | Thuế GTGT đầu vào | Thuế GTGT khấu trừ | `FinanceView` | VAT on purchase documents. Same open question as above. | NEEDS FINANCE CONFIRMATION |
 
 ---
 
@@ -173,6 +206,14 @@ This document establishes the terminology used in the Vietnamese localization (`
 | `common.loading` | Loading… | Đang tải… | Vui lòng chờ… | Spinners, skeletons | DRAFT |
 | `common.empty` | No data | Không có dữ liệu | Trống | Empty state | DRAFT |
 | `common.required` | Required | Bắt buộc | Cần điền | Form indicators | DRAFT |
+| `common.optional` | Optional | Không bắt buộc | Tùy chọn | New order field markers | Shown beside a label as "(không bắt buộc)"; `aria-hidden`, because the control's own `required` attribute is what a screen reader announces | DRAFT |
+| `newOrder.requiredLegend` | Fields marked * are required. | Các trường có dấu * là bắt buộc. | — | New order form | Explains the `*` once, so the marker is never colour-only | DRAFT |
+| `newOrder.descriptionHelp` | Filled in from the product you choose; you can edit it. | Tự động điền theo sản phẩm đã chọn; có thể sửa lại. | — | New order line | Pilot 1: 1 of 2 respondents found 1–2 fields unclear | DRAFT |
+| `newOrder.quantityHelp` | Counted in the unit named beside it. | Tính theo đơn vị ghi ở ô bên cạnh. | — | New order line | Ties the quantity to the unit field beside it | DRAFT |
+| `newOrder.agreedPriceHelp` | Price for one unit, in Vietnamese dong (₫). | Đơn giá cho một đơn vị, tính bằng đồng (₫). | — | New order line | **Deliberately silent on VAT**: whether agreed order pricing includes VAT is unvalidated (Topic 4.2). Do not add "chưa VAT" or "đã VAT" until the bookkeeper confirms. | NEEDS FINANCE CONFIRMATION |
+| `newOrder.errors.quantityInvalid` | Quantity must be a number greater than 0. | Số lượng phải là một số lớn hơn 0. | — | New order form | Replaces a generic API "request invalid" with the field at fault | DRAFT |
+| `orders.nextStep` | Next step: | Bước tiếp theo: | Việc tiếp theo | `OrderBoard`, read-only roles | Names the next lifecycle step as text for `FACTORY_READ`, which has no control to advance it | DRAFT |
+| `firstUse.body` | UniOps brings order information, EasyBooks data, and sync status together in one place. Some financial information still has to be checked directly in EasyBooks. | UniOps tập trung thông tin đơn hàng, dữ liệu EasyBooks và trạng thái đồng bộ tại một nơi. Một số thông tin tài chính vẫn cần kiểm tra trực tiếp trong EasyBooks. | — | First-use callout, dismissed once | Pilot 1 facilitator note: "cũng phải mất thời gian để làm quen" | DRAFT |
 | `auth.signIn` | Sign in | Đăng nhập | Đăng nhập hệ thống | Login form | DRAFT |
 | `auth.signingIn` | Signing in… | Đang đăng nhập… | Đang xác thực… | Login button | DRAFT |
 | `auth.username` | Username | Tên đăng nhập | Tài khoản | Login input | DRAFT |
@@ -218,4 +259,10 @@ Short Vietnamese proverbs about diligence and work, attributed to "Tục ngữ" 
 4. **Cảnh báo Trễ hạn giao hàng (Topic 3)**:
    - Trên thẻ đơn hàng, nhãn **"Trễ hạn giao"** được kích hoạt khi ngày cần hàng (`required_date`) đã qua mà đơn chưa giao. Xin xác nhận KHÔNG dùng từ "Quá hạn" đơn thuần để tránh nhân viên nhầm lẫn với quá hạn thanh toán công nợ.
 5. **Trạng thái Thanh toán Hóa đơn (Topic 2)**:
-   - Bản thảo hiển thị **"Chưa có thông tin"** cho payment status `UNKNOWN`. Xác nhận không suy đoán "Chưa thanh toán" khi chưa có chứng từ thu tiền.
+   - Sau đợt thử nghiệm thứ nhất, bản thảo đã đổi từ **"Chưa có thông tin"** sang **"Chưa có dữ liệu xác nhận thanh toán"**, kèm câu giải thích: *"UniOps chưa có đủ dữ liệu để kết luận đã trả, chưa trả, trả một phần hoặc quá hạn. Hãy kiểm tra EasyBooks."* Xin xác nhận cách diễn đạt này, và xác nhận UniOps tuyệt đối không suy đoán "Chưa thanh toán" khi chưa có chứng từ thu tiền.
+6. **Nguồn chính thức của số dư công nợ (Topic 1)**:
+   - Trong EasyBooks, báo cáo nào hiện được dùng làm **nguồn chính thức** cho số dư công nợ phải thu của khách hàng? Xin nêu đúng tên báo cáo và người có thẩm quyền xác nhận quy tắc này.
+7. **Doanh số trước hay sau VAT (Topic 4)**:
+   - Theo quy định/sổ sách hiện tại, con số doanh số **chính thức** là trước VAT hay sau VAT? Đây là câu hỏi về quy định, không phải về sở thích hiển thị.
+8. **Công nợ phải trả (chưa có trong V1)**:
+   - UniOps hiện **không** có bất kỳ số liệu công nợ phải trả nào. Xin xác nhận điều này không bị hiểu nhầm là "bằng 0".

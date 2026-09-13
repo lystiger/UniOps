@@ -346,6 +346,48 @@ def test_payment_and_due_state_stay_unknown_because_easybooks_says_nothing(
     assert invoice["due_status"] == "UNKNOWN"
 
 
+def test_no_route_ever_states_a_settlement_the_source_cannot_prove(session, office_client):
+    """The whole read model, not one endpoint.
+
+    The first pilot misread "no payment information" as "the customer has not
+    paid". The wording was fixed in the UI, but the guarantee behind it is here:
+    no response may carry PAID, UNPAID, PARTIALLY_PAID, DUE or OVERDUE, and no
+    money field derived from a payment may come back as a zero instead of null.
+    """
+    order, document = _linkable(session)
+    office_client.post(
+        f"/api/orders/{order.id}/invoice-links", json={"sales_document_id": document.id}
+    )
+
+    forbidden = {"PAID", "UNPAID", "PARTIALLY_PAID", "DUE", "OVERDUE"}
+
+    def walk(node, path=""):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                walk(value, f"{path}.{key}")
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                walk(value, f"{path}[{index}]")
+        elif isinstance(node, str):
+            assert node not in forbidden, f"{path} claims a settlement state: {node}"
+
+    for route in (
+        f"/api/orders/{order.id}/accounting",
+        "/api/analytics/receivables",
+    ):
+        response = office_client.get(route)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        walk(body, route)
+
+    receivables = office_client.get("/api/analytics/receivables").json()
+    # Null, never zero: a zero would assert that nothing is owed.
+    assert receivables["total_outstanding"] is None
+    assert receivables["total_overdue"] is None
+    assert receivables["unpaid_invoice_count"] is None
+    assert receivables["overdue_invoice_count"] is None
+
+
 def test_an_invoice_without_a_due_date_is_never_reported_overdue(session, office_client):
     order, document = _linkable(session)
     office_client.post(

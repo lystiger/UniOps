@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, formatApiError, UnauthorizedError } from "../api";
 import { isoDate, money } from "../format";
 import { useT } from "../i18n";
+import { UnsupportedValue } from "./primitives";
 import type { AccountingStatus, InvoiceCandidate, Order, OrderAccounting } from "../types";
 
 const statusToneMeta: Record<AccountingStatus, { symbol: string; tone: "draft" | "pending" | "accepted" }> = {
@@ -146,9 +147,18 @@ export function AccountingPanel({
               </div>
               <div>
                 <dt>{t.accounting.facts.outstanding}</dt>
-                <dd>{money(accounting.outstanding_amount)}</dd>
+                <dd>
+                  {accounting.outstanding_amount === null ? (
+                    <UnsupportedValue />
+                  ) : (
+                    money(accounting.outstanding_amount)
+                  )}
+                </dd>
               </div>
             </dl>
+            {accounting.payment_status === "UNKNOWN" && (
+              <p className="accounting-note">{t.accounting.paymentUnknownNote}</p>
+            )}
             {accounting.outstanding_amount === null && accounting.outstanding_status === "NO_PAYMENT_SOURCE" && (
               <p className="accounting-note">{t.accounting.outstandingExposesNote}.</p>
             )}

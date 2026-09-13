@@ -6,6 +6,33 @@ import { DateInput } from "./DateInput";
 
 const ignoreSessionLoss = () => undefined;
 
+/** A field label carrying its "*" or its "(không bắt buộc)".
+ *
+ * The pilot could not tell which fields were mandatory. Both markers are
+ * `aria-hidden`: the control's own `required` attribute is what a screen reader
+ * announces, so the accessible name stays the field's name and is never doubled.
+ * The "*" is explained once by the form's legend, so it is not colour-only. */
+function FieldLabel({ text, required = false }: { text: string; required?: boolean }) {
+  const t = useT();
+  return (
+    <span>
+      {text}
+      {required ? (
+        <span className="field-required" aria-hidden="true">
+          *
+        </span>
+      ) : (
+        <>
+          {" "}
+          <span className="field-optional" aria-hidden="true">
+            ({t.common.optional.toLowerCase()})
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
 const emptyLine = (): NewOrderLine => ({
   product_id: "",
   description: "",
@@ -77,6 +104,12 @@ export function NewOrder({
       setError(t.newOrder.errors.chooseCustomerFirst);
       return;
     }
+    // The API rejects quantity <= 0 as a generic REQUEST_INVALID. Saying which
+    // field is wrong is the whole difference between a fixable form and a wall.
+    if (lines.some((line) => !(Number(line.quantity) > 0))) {
+      setError(t.newOrder.errors.quantityInvalid);
+      return;
+    }
     setSaving(true);
     try {
       await api.createOrder({
@@ -109,22 +142,23 @@ export function NewOrder({
       <div className="intake-layout">
         <form className="order-form" onSubmit={submit}>
           {error && <div className="message error" role="alert">{error}</div>}
+          <p className="form-required-legend">{t.newOrder.requiredLegend}</p>
           <fieldset className="form-section">
             <legend>{t.newOrder.orderDetails}</legend>
             <div className="field-grid three">
               <label>
-                <span>{t.newOrder.customer}</span>
+                <FieldLabel text={t.newOrder.customer} required />
                 <select value={customerId} onChange={(event) => setCustomerId(event.target.value)} required>
                   <option value="">{t.newOrder.chooseCustomer}</option>
                   {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
                 </select>
               </label>
               <label>
-                <span>{t.newOrder.orderDate}</span>
+                <FieldLabel text={t.newOrder.orderDate} required />
                 <DateInput value={orderDate} onChange={setOrderDate} required />
               </label>
               <label>
-                <span>{t.newOrder.requiredDate}</span>
+                <FieldLabel text={t.newOrder.requiredDate} required />
                 <DateInput min={orderDate} value={requiredDate} onChange={setRequiredDate} required />
               </label>
             </div>
@@ -138,27 +172,31 @@ export function NewOrder({
                   <div className="line-index">{String(index + 1).padStart(2, "0")}</div>
                   <div className="field-grid line-fields">
                     <label className="product-field">
-                      <span>{t.newOrder.product}</span>
+                      <FieldLabel text={t.newOrder.product} />
                       <select value={line.product_id} onChange={(event) => selectProduct(index, event.target.value)}>
                         <option value="">{t.newOrder.customItem}</option>
                         {products.map((product) => <option key={product.id} value={product.id}>{product.code ? `${product.code} — ` : ""}{product.name}</option>)}
                       </select>
                     </label>
                     <label className="description-field">
-                      <span>{t.newOrder.description}</span>
+                      <FieldLabel text={t.newOrder.description} required />
                       <input value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} required />
+                      <span className="field-help">{t.newOrder.descriptionHelp}</span>
                     </label>
                     <label>
-                      <span>{t.newOrder.quantity}</span>
+                      <FieldLabel text={t.newOrder.quantity} required />
                       <input inputMode="decimal" value={line.quantity} onChange={(event) => updateLine(index, { quantity: event.target.value })} placeholder="0" required />
+                      <span className="field-help">{t.newOrder.quantityHelp}</span>
                     </label>
                     <label>
-                      <span>{t.newOrder.unit}</span>
+                      <FieldLabel text={t.newOrder.unit} required />
                       <input value={line.unit} onChange={(event) => updateLine(index, { unit: event.target.value })} required />
+                      <span className="field-help">{t.newOrder.unitHelp}</span>
                     </label>
                     <label>
-                      <span>{t.newOrder.agreedPrice}</span>
-                      <input inputMode="decimal" value={line.agreed_unit_price} onChange={(event) => updateLine(index, { agreed_unit_price: event.target.value })} placeholder={t.newOrder.optional} />
+                      <FieldLabel text={t.newOrder.agreedPrice} />
+                      <input inputMode="decimal" value={line.agreed_unit_price} onChange={(event) => updateLine(index, { agreed_unit_price: event.target.value })} placeholder="0" />
+                      <span className="field-help">{t.newOrder.agreedPriceHelp}</span>
                     </label>
                     <button
                       type="button"
@@ -181,7 +219,7 @@ export function NewOrder({
           <fieldset className="form-section">
             <legend>{t.newOrder.notes}</legend>
             <label>
-              <span>{t.newOrder.productionDeliveryNotes}</span>
+              <FieldLabel text={t.newOrder.productionDeliveryNotes} />
               <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} placeholder={t.newOrder.notesPlaceholder} />
             </label>
           </fieldset>
@@ -244,16 +282,16 @@ function QuickCatalog({ customers, products, reload }: { customers: Customer[]; 
       <details>
         <summary>{t.newOrder.addCustomer}</summary>
         <form onSubmit={addCustomer}>
-          <label><span>{t.newOrder.customerName}</span><input value={customerName} onChange={(event) => setCustomerName(event.target.value)} required /></label>
+          <label><FieldLabel text={t.newOrder.customerName} required /><input value={customerName} onChange={(event) => setCustomerName(event.target.value)} required /></label>
           <button className="secondary-button" type="submit">{t.newOrder.addCustomer}</button>
         </form>
       </details>
       <details>
         <summary>{t.newOrder.addProduct}</summary>
         <form onSubmit={addProduct}>
-          <label><span>{t.newOrder.productCode}</span><input value={product.code} onChange={(event) => setProduct({ ...product, code: event.target.value })} /></label>
-          <label><span>{t.newOrder.productName}</span><input value={product.name} onChange={(event) => setProduct({ ...product, name: event.target.value })} required /></label>
-          <label><span>{t.newOrder.productUnit}</span><input value={product.unit} onChange={(event) => setProduct({ ...product, unit: event.target.value })} required /></label>
+          <label><FieldLabel text={t.newOrder.productCode} /><input value={product.code} onChange={(event) => setProduct({ ...product, code: event.target.value })} /></label>
+          <label><FieldLabel text={t.newOrder.productName} required /><input value={product.name} onChange={(event) => setProduct({ ...product, name: event.target.value })} required /></label>
+          <label><FieldLabel text={t.newOrder.productUnit} required /><input value={product.unit} onChange={(event) => setProduct({ ...product, unit: event.target.value })} required /></label>
           <button className="secondary-button" type="submit">{t.newOrder.addProduct}</button>
         </form>
       </details>

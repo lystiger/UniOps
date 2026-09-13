@@ -136,10 +136,14 @@ test("the captured link is stored, not just shown", async ({ page }) => {
   await expect(fact(page, panel, "Accounting")).toHaveText("Invoiced");
   await expect(linkedRow(page, panel)).toContainText(facts().invoice_number);
 
-  // Nothing observed in EasyBooks says this invoice was paid, and UniOps reports
-  // that as unknown rather than as nothing owed.
-  await expect(fact(page, panel, "Payment")).toHaveText("Unknown");
-  await expect(fact(page, panel, "Outstanding")).toHaveText("—");
+  // Nothing observed in EasyBooks says this invoice was paid or unpaid. The
+  // panel names the missing data, never a settlement state: the first pilot read
+  // the old "Chưa có thông tin" as proof the customer had not paid.
+  await expect(fact(page, panel, "Payment")).toHaveText("No payment confirmation data");
+  await expect(panel.getByText(/does not currently have enough data/)).toBeVisible();
+  await expect(fact(page, panel, "Outstanding")).toHaveText("No confirmation data");
+  await expect(panel.getByText("Unpaid", { exact: true })).toHaveCount(0);
+  await expect(panel.getByText("Overdue", { exact: true })).toHaveCount(0);
 });
 
 test("the API agrees with the panel", async ({ page }) => {

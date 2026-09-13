@@ -60,6 +60,7 @@ export const en: Dictionary = {
     activeOrdersSummary: ({ count, overdueCount }: { count: number; overdueCount: number }) =>
       `${count} active orders${overdueCount > 0 ? ` · ${overdueCount} overdue` : ""}`,
     overdueDelivery: "Overdue",
+    nextStep: "Next step:",
     requiredLabel: "Required",
     accountingAria: (orderNumber: string) => `Accounting for ${orderNumber}`,
     noLines: "No lines",
@@ -73,11 +74,13 @@ export const en: Dictionary = {
       INVOICED: "Invoiced",
     },
     paymentStatus: {
-      UNKNOWN: "Unknown",
+      UNKNOWN: "No payment confirmation data",
       UNPAID: "Unpaid",
       PARTIALLY_PAID: "Partially paid",
       PAID: "Paid",
     },
+    paymentUnknownNote:
+      "UniOps does not currently have enough data to determine whether the invoice is paid, unpaid, partially paid, or overdue. Check EasyBooks for confirmation.",
     dialogAria: (orderNumber: string) => `Accounting for ${orderNumber}`,
     loading: "Loading accounting…",
     facts: {
@@ -234,7 +237,6 @@ export const en: Dictionary = {
     noInvoicesPeriod: "No invoices for this period.",
     noDocumentsDatedInPeriod: "No documents with a date in this period.",
     noInvoicesForCustomer: "No invoices for this customer.",
-    unavailable: "Unavailable",
     customerInvoicesAria: (name: string) => `Invoices for ${name}`,
     customerInvoicesTitle: (name: string) => `Invoices for ${name}`,
     loadingInvoices: "Loading invoices…",
@@ -321,6 +323,7 @@ export const en: Dictionary = {
   },
   newOrder: {
     title: "New order",
+    requiredLegend: "Fields marked * are required.",
     orderDetails: "Order details",
     customer: "Customer",
     chooseCustomer: "Choose customer",
@@ -330,9 +333,13 @@ export const en: Dictionary = {
     product: "Product",
     customItem: "Custom item",
     description: "Description",
+    descriptionHelp: "Filled in from the product you choose; you can edit it.",
     quantity: "Quantity",
+    quantityHelp: "Counted in the unit named beside it.",
     unit: "Unit",
+    unitHelp: "For example: kg.",
     agreedPrice: "Agreed price",
+    agreedPriceHelp: "Price for one unit, in Vietnamese dong (₫).",
     optional: "Optional",
     removeLineAria: (index: number) => `Remove product line ${index}`,
     removeLine: "Remove",
@@ -356,6 +363,7 @@ export const en: Dictionary = {
     productAdded: "Product added",
     errors: {
       chooseCustomerFirst: "Choose a customer before saving the order",
+      quantityInvalid: "Quantity must be a number greater than 0.",
       loadCatalog: "Could not load the catalog",
       orderNotSaved: "Order was not saved",
       customerNotAdded: "Customer was not added",
@@ -394,6 +402,11 @@ export const en: Dictionary = {
     lastSyncAttempt: (time: string) => `Last EasyBooks sync attempt ${time}`,
     lastSync: (time: string) => `Last EasyBooks sync: ${time}`,
   },
+  firstUse: {
+    body:
+      "UniOps brings order information, EasyBooks data, and sync status together in one place. Some financial information still has to be checked directly in EasyBooks.",
+    dismiss: "Got it",
+  },
   common: {
     save: "Save",
     saving: "Saving…",
@@ -403,6 +416,9 @@ export const en: Dictionary = {
     loading: "Loading…",
     empty: "No data",
     required: "Required",
+    optional: "Optional",
+    unsupportedValue: "No confirmation data",
+    loadFailedValue: "Could not load",
     status: "Status",
     datePlaceholder: "dd/mm/yyyy",
     invalidDate: "Not a valid date. Type day/month/year, e.g. 31/12/2026.",

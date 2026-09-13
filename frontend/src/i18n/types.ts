@@ -101,6 +101,8 @@ export interface Dictionary {
     emptyColumn: string;
     activeOrdersSummary: (params: { count: number; overdueCount: number }) => string;
     overdueDelivery: string;
+    /** Leads the next lifecycle step shown to a read-only role as text. */
+    nextStep: string;
     requiredLabel: string;
     accountingAria: (orderNumber: string) => string;
     noLines: string;
@@ -110,6 +112,8 @@ export interface Dictionary {
   accounting: {
     status: Record<AccountingStatus, string>;
     paymentStatus: Record<PaymentStatus, string>;
+    /** Why `paymentStatus.UNKNOWN` is not a claim that the customer has not paid. */
+    paymentUnknownNote: string;
     dialogAria: (orderNumber: string) => string;
     loading: string;
     facts: {
@@ -254,7 +258,6 @@ export interface Dictionary {
     noInvoicesPeriod: string;
     noDocumentsDatedInPeriod: string;
     noInvoicesForCustomer: string;
-    unavailable: string;
     customerInvoicesAria: (name: string) => string;
     customerInvoicesTitle: (name: string) => string;
     loadingInvoices: string;
@@ -337,6 +340,8 @@ export interface Dictionary {
   };
   newOrder: {
     title: string;
+    /** "* Bắt buộc" legend, so a required field is marked rather than guessed at. */
+    requiredLegend: string;
     orderDetails: string;
     customer: string;
     chooseCustomer: string;
@@ -346,9 +351,16 @@ export interface Dictionary {
     product: string;
     customItem: string;
     description: string;
+    /** Says the description is prefilled from the product and may be edited. */
+    descriptionHelp: string;
     quantity: string;
+    /** Says the quantity is counted in the unit named beside it. */
+    quantityHelp: string;
     unit: string;
+    unitHelp: string;
     agreedPrice: string;
+    /** Currency and basis of the agreed price. VAT treatment is NOT stated: unvalidated. */
+    agreedPriceHelp: string;
     optional: string;
     removeLineAria: (index: number) => string;
     removeLine: string;
@@ -371,6 +383,7 @@ export interface Dictionary {
     productAdded: string;
     errors: {
       chooseCustomerFirst: string;
+      quantityInvalid: string;
       loadCatalog: string;
       orderNotSaved: string;
       customerNotAdded: string;
@@ -403,6 +416,11 @@ export interface Dictionary {
     lastSyncAttempt: (time: string) => string;
     lastSync: (time: string) => string;
   };
+  /** One dismissible first-use callout. Not a tour: one paragraph, one button. */
+  firstUse: {
+    body: string;
+    dismiss: string;
+  };
   common: {
     save: string;
     saving: string;
@@ -412,6 +430,11 @@ export interface Dictionary {
     loading: string;
     empty: string;
     required: string;
+    optional: string;
+    /** A figure the accounting source does not support. Never a zero, never an error. */
+    unsupportedValue: string;
+    /** A figure that failed to load. Distinct from {@link unsupportedValue}. */
+    loadFailedValue: string;
     status: string;
     /** Placeholder for a day-first date field. */
     datePlaceholder: string;
